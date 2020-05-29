@@ -25,6 +25,12 @@ typedef struct process{
     int job_time;
 } process;
 
+void print_process(process* target_process){
+    printf("\n%d %d %d %d", target_process->time_arrived, target_process->process_id, 
+    target_process->memory_size_req, target_process->job_time);
+}
+
+
 //***********************************************************************************************
 //queue and helper functions
 
@@ -42,25 +48,40 @@ struct Process_queue{
     int len;
 };
 
+process_queue* construct_queue(){
+    process_queue* new_queue = malloc(sizeof(process_queue));
+    new_queue->front = NULL;
+    new_queue->back = NULL;
+    new_queue->len = 0;
+    return new_queue;
+
+}
+
 void queue_enqueue(process_queue* queue, process* new_process){
+    printf("enqueuing...");
+    print_process(new_process);
+    printf("/");
     //create new node
     queue_node* new_node = malloc(sizeof(queue_node));
     new_node->value = new_process;
     new_node->prev = NULL;
     if (queue->len != 0){
         new_node->next = queue->back;
+        queue->back->prev = new_node;
     }else{
         new_node->next = NULL;
+        queue->front = new_node;
     }
-
-    //update queue to reflect new addition
-    queue->back->prev = new_node;
     queue->back = new_node; 
+    queue->len += 1;
 }
 
 process* queue_dequeue(process_queue* queue){
     process* return_val = queue->front->value;
-    queue->front->prev->next = NULL;
+    if (queue->len > 1){
+        queue->front->prev->next = NULL;
+    }
+    
     queue->front = queue->front->prev;
     if (queue->len == 1){
         queue->back = NULL;
@@ -69,22 +90,16 @@ process* queue_dequeue(process_queue* queue){
     return return_val;
 }
 
-//***********************************************************************************************
-//printing functions
-void print_process(process* target_process){
-    printf("%d %d %d %d\n", target_process->time_arrived, target_process->process_id, 
-    target_process->memory_size_req, target_process->job_time);
-}
-
 void print_queue(process_queue* queue){
     printf("printing from the back of the queue");
     queue_node* cur = queue->back;
     while(cur != NULL){
+        printf("\nNEXT");
         print_process(cur->value);
         cur = cur->next;
     }
+    printf("\nprint complete...");
 }
-
 
 
 //***********************************************************************************************
@@ -100,12 +115,13 @@ process_queue* load_processes(char* filename){
     }
     
     //load processes
-    process_queue* incoming_process_queue = malloc(sizeof(process_queue));
+    process_queue* incoming_process_queue = construct_queue();
     for (process* new_process = malloc(sizeof(process)); fscanf(file,"%d %d %d %d\r\n", &new_process->time_arrived, 
             &new_process->process_id, &new_process->memory_size_req, 
-            &new_process->job_time) == 4; queue_enqueue(incoming_process_queue, new_process)){
-        //create a new process to write to and enqueue
-        new_process = malloc(sizeof(process));
+            &new_process->job_time) == 4;new_process = malloc(sizeof(process))){
+        //enqueue process
+        queue_enqueue(incoming_process_queue, new_process);
+        
     }
     return incoming_process_queue;
 }
