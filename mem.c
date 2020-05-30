@@ -4,6 +4,7 @@
 
 //defines
 #define MAX_NUM_PROCESSES 1000
+#define RESIZE_MULTIPLIER 2
 
 //memory config
 #define MEM_UNLIMITED 1
@@ -19,10 +20,10 @@
 //***********************************************************************************************
 //process information struct
 typedef struct process{
-    int time_arrived;
-    int process_id;
-    int memory_size_req;
-    int job_time;
+    unsigned long time_arrived;
+    unsigned long process_id;
+    unsigned long memory_size_req;
+    unsigned long job_time;
 } process;
 
 void print_process(process* target_process){
@@ -45,7 +46,7 @@ typedef struct Process_queue process_queue;
 struct Process_queue{
     queue_node* front;
     queue_node* back;
-    int len;
+    unsigned long len;
 };
 
 process_queue* construct_queue(){
@@ -102,7 +103,7 @@ process* queue_dequeue(process_queue* queue){
 void print_queue(process_queue* queue){
     printf("\nprinting from the back of the queue");
     queue_node* cur = queue->back;
-    int i = 0;
+    unsigned long i = 0;
     while(cur != NULL){
         printf("\n[%d]: ", i);
         print_process(cur->value);
@@ -111,6 +112,104 @@ void print_queue(process_queue* queue){
     }
     printf("\nprint complete...");
 }
+
+
+//***********************************************************************************************
+//memory storage datatype
+typedef struct Sorted_mem_pages sorted_mem_pages
+struct Sorted_mem_pages{
+    unsigned long len; //number of elements
+    unsigned long alloced_len; //number of elements that can fit in allocated memory
+    unsigned long* page_array;
+};
+
+sorted_mem_pages* construct_mem_pages(){
+    new_pages = malloc(sizeof(sorted_mem_pages));
+    new_pages->len = 0;
+    new_pages->alloced_len = 0;
+    new_pages->page_array = NULL;
+    return new_pages;
+}
+
+void page_array_insert(sorted_mem_pages* page_storage, int page_number){
+    //insert first element
+    if (page_storage->len == 0){
+        //set initial size
+        if (page_storage->alloced_len == 0){
+            page_storage->page_array = malloc(PAGE_ARRAY_INIT_SIZE * sizeof(unsigned long));
+            page_storage->alloced_len = PAGE_ARRAY_INIT_SIZE;
+        }
+        page_storage->page_array[0] = page_number;
+        page_storage->len = 1;
+    }else{
+        //=================================================================================
+        //the following binary search for insertion location is a modified form of code obtained from
+        //https://stackoverflow.com/questions/24868637/inserting-in-to-an-ordered-array-using-binary-search
+        
+        unsigned long low = 0;
+        unsigned long high = len-1;
+        while (low != high){
+            mid = low/2 + high/2;
+            if (page_storage->page_array[mid] <= page_number){
+                low = mid + 1;
+            }else{
+                high = mid;
+            }
+        }
+        unsigned long insert_index = mid;
+        //=============================end modified code===================================
+
+        //reallocate and insert
+        //prob have off by 1 bugs here
+        if (page_storage->alloced_len < 1 + page_storage->len){
+            unsigned long* new_storage_array = malloc(((page_storage->len + 1) * RESIZE_MULTIPLIER) * sizeof(unsigned long));
+            page_storage->alloced_len = (page_storage->len + 1) * RESIZE_MULTIPLIER;
+
+            unsigned long did_insert = 0;
+            for (unsigned long i = 0; i < page_storage->len; i++){
+                if (i == insert_index){
+                    new_storage_array[i] = page_number;
+                    did_insert = 1;
+                }
+                new_storage_array[i+did_insert] = page_storage->page_array[i+did_insert];
+            }
+            free(page_storage->page_array);
+            page_storage->page_array = new_storage_array;
+        }
+        //if no reallocation is required
+
+        //store values that will be shifted
+        tmp = malloc((page_storage->len - insert_index + 1) * sizeof(unsigned long));
+        for (unsigned int = insert_index; i < page_storage->len; i++ ){
+            tmp[i] = page_storage->page_array[i]; 
+        }
+        //insert
+        page_storage->page_array[i] = page_number;
+
+        //rewrite shifted values
+        for (unsigned int = insert_index+1; i < page_storage->len + 1; i++){
+            page_storage->page_array[i] = tmp[i];
+        }
+    }
+}
+
+
+//hash table (closer to a lookup table as the hashing function is x => x)
+sorted_mem_pages* create_hash_table(){
+    sorted_mem_pages* mem_hash_table = malloc((MAX_NUM_PROCESSES) * sizeof(sorted_mem_pages));
+    //populate hash table with empty lists
+    for (unsigned long i = 0; i < MAX_NUM_PROCESSES; i++){
+        mem_hash_table[i] = construct_mem_pages();
+    }
+    return mem_hash_table;
+}
+
+
+void allocate_mem_to_process(memlist** mem_hash_table, unsigned long process_id, unsigned long page_number){
+    mem_hash_table[process_id]
+}
+
+//get 
 
 
 //***********************************************************************************************
@@ -139,7 +238,7 @@ process_queue* load_processes(char* filename){
 
 //***********************************************************************************************
 //dummy function so code compiles, replace later
-int load_memory(process* cur_process, int memory_manager_type){
+unsigned long load_memory(process* cur_process, unsigned long memory_manager_type){
     printf("loaded memory...");
     return 0;
 }
@@ -148,11 +247,11 @@ int load_memory(process* cur_process, int memory_manager_type){
 //first come first served scheduler
 
 //can prob do faster with some kind of lookup or special ordering in data struct, but O(n) is pretty fast anyway so who cares
-int processes_waiting(int current_time, process_queue* incoming_process_queue){
+unsigned long processes_waiting(unsigned long current_time, process_queue* incoming_process_queue){
     if (incoming_process_queue->len == 0){
         return 0;
     }
-    int n_processes_waiting = 0;
+    unsigned long n_processes_waiting = 0;
     queue_node* cur = incoming_process_queue->front;
     while (cur != NULL){
         if (cur->value->time_arrived <= current_time){
@@ -166,9 +265,9 @@ int processes_waiting(int current_time, process_queue* incoming_process_queue){
 }
 
 
-void first_come_first_served(process_queue* incoming_process_queue, int memory_manager_type){
-    int current_time = 0;
-    int n_processes_waiting;
+void first_come_first_served(process_queue* incoming_process_queue, unsigned long memory_manager_type){
+    unsigned long current_time = 0;
+    unsigned long n_processes_waiting;
     process* cur_process = queue_dequeue(incoming_process_queue);
     while (cur_process != NULL){
         //simulate waiting for new process
@@ -201,15 +300,17 @@ void first_come_first_served(process_queue* incoming_process_queue, int memory_m
 }
 
 
-int max(int a, int b){
+//***********************************************************************************************
+//round robin scheduler
+
+unsigned long max(unsigned long a, unsigned long b){
     if (a >= b){
         return a; 
     }
     return b;
 }
 
-
-void enqueue_arrived_processes(int current_time, process_queue* working_queue, process_queue* incoming_process_queue){
+void enqueue_arrived_processes(unsigned long current_time, process_queue* working_queue, process_queue* incoming_process_queue){
     if (incoming_process_queue->len == 0){
         printf("\nincoming queue is empty");
         return;
@@ -227,8 +328,8 @@ void enqueue_arrived_processes(int current_time, process_queue* working_queue, p
     }
 }
 
-void round_robin(process_queue* incoming_process_queue, int quantum, int memory_manager_type){
-    int current_time = 0;
+void round_robin(process_queue* incoming_process_queue, unsigned long quantum, unsigned long memory_manager_type){
+    unsigned long current_time = 0;
     process* cur_process;
 
     //used to store processes that have actually arrived
@@ -292,13 +393,12 @@ void round_robin(process_queue* incoming_process_queue, int quantum, int memory_
         }
         
     }
-
 }
 
 //TODO!!! ADD LOGIC TO ENQUEUE TO MAINTAIN PROCESS_ID ORDER WITHIN THE QUEUE
 
 //***********************************************************************************************
-int main(int argc, char** argv){
+unsigned long main(unsigned long argc, char** argv){
     //disable print buffer
     setvbuf(stdout, NULL, _IONBF, 0);
 
