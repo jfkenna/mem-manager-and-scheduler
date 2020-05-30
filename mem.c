@@ -20,7 +20,7 @@
 #define SCHEDULER_CUSTOM 'c'
 
 //debugging
-#define DEBUG 0
+#define DEBUG 1
 
 //***********************************************************************************************
 //process information struct
