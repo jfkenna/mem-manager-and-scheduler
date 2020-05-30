@@ -26,7 +26,7 @@ typedef struct process{
 } process;
 
 void print_process(process* target_process){
-    printf("\n%d %d %d %d", target_process->time_arrived, target_process->process_id, 
+    printf("%d %d %d %d", target_process->time_arrived, target_process->process_id, 
     target_process->memory_size_req, target_process->job_time);
 }
 
@@ -58,9 +58,8 @@ process_queue* construct_queue(){
 }
 
 void queue_enqueue(process_queue* queue, process* new_process){
-    printf("enqueuing...");
+    printf("\nenqueuing/");
     print_process(new_process);
-    printf("/");
     //create new node
     queue_node* new_node = malloc(sizeof(queue_node));
     new_node->value = new_process;
@@ -77,26 +76,38 @@ void queue_enqueue(process_queue* queue, process* new_process){
 }
 
 process* queue_dequeue(process_queue* queue){
+    //if queue has nothing to dequeue
+    if (queue->len == 0){
+        return NULL;
+    }
+
     process* return_val = queue->front->value;
     if (queue->len > 1){
         queue->front->prev->next = NULL;
+        queue->front = queue->front->prev;
+        printf("\ndequeue complete - new front is: ");
+        print_process(queue->front->value);
     }
     
-    queue->front = queue->front->prev;
     if (queue->len == 1){
         queue->back = NULL;
+        queue->front = NULL;
+        printf("\ndequeue complete - queue is now empty");
     }
+
     queue->len -= 1;
     return return_val;
 }
 
 void print_queue(process_queue* queue){
-    printf("printing from the back of the queue");
+    printf("\nprinting from the back of the queue");
     queue_node* cur = queue->back;
+    int i = 0;
     while(cur != NULL){
-        printf("\nNEXT");
+        printf("\n[%d]: ", i);
         print_process(cur->value);
         cur = cur->next;
+        i += 1;
     }
     printf("\nprint complete...");
 }
@@ -110,7 +121,7 @@ process_queue* load_processes(char* filename){
 
     //if file open failed
     if (file == NULL){
-        printf("null file, returning...");
+        printf("\nnull file, returning...");
         return NULL;
     }
     
@@ -135,9 +146,30 @@ int load_memory(process* cur_process, int memory_manager_type){
 
 //***********************************************************************************************
 //first come first served scheduler
+
+//can prob do faster with some kind of lookup or special ordering in data struct, but O(n) is pretty fast anyway so who cares
+int processes_waiting(int current_time, process_queue* incoming_process_queue){
+    if (incoming_process_queue->len == 0){
+        return 0;
+    }
+    int n_processes_waiting = 0;
+    queue_node* cur = incoming_process_queue->front;
+    while (cur != NULL){
+        if (cur->value->time_arrived <= current_time){
+            n_processes_waiting += 1;
+            cur = cur->prev;
+        }else{
+            return n_processes_waiting;
+        }
+    }
+    return n_processes_waiting;
+}
+
+
 void first_come_first_served(process_queue* incoming_process_queue, int memory_manager_type){
     int global_time = 0;
-
+    int load_memory_cost;
+    int n_processes_waiting;
     process* cur_process = queue_dequeue(incoming_process_queue);
     while (cur_process != NULL){
         //simulate waiting for new process
@@ -146,16 +178,22 @@ void first_come_first_served(process_queue* incoming_process_queue, int memory_m
         }
 
         //print generic process start info
-        printf("current_time is %d , program running, id %d, remaining time %d", global_time, cur_process->process_id, cur_process->job_time);
+        printf("\ncurrent_time is %d , program running, id %d, remaining time %d", global_time, cur_process->process_id, cur_process->job_time);
         
         //load required pages
-        int load_memory_cost = 0;
+        load_memory_cost = 0;
         if (memory_manager_type != MEM_UNLIMITED){
             load_memory_cost = load_memory(cur_process, memory_manager_type);
         }
         
         //simulate time spent loading pages and running job
         global_time += load_memory_cost + cur_process->job_time;
+
+        //count how many processes are waiting
+        n_processes_waiting = processes_waiting(global_time, incoming_process_queue);
+
+        //print process complete info
+        printf("\ncurrent time is %d, process complete, id %d, processes remaining %d", global_time, cur_process->process_id, n_processes_waiting);
 
         //get next enqueued process
         cur_process = queue_dequeue(incoming_process_queue);
@@ -165,6 +203,9 @@ void first_come_first_served(process_queue* incoming_process_queue, int memory_m
 
 //***********************************************************************************************
 int main(int argc, char** argv){
+    //disable print buffer
+    setvbuf(stdout, NULL, _IONBF, 0);
+
     //check correct args are passed
     if (argc != 6){
         printf("incorrect number of arguments, had %d, expected 5\n returning...", argc-1);
