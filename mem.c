@@ -58,8 +58,8 @@ process_queue* construct_queue(){
 }
 
 void queue_enqueue(process_queue* queue, process* new_process){
-    printf("\nenqueuing/");
-    print_process(new_process);
+    //printf("\nenqueuing/");
+    //print_process(new_process);
     //create new node
     queue_node* new_node = malloc(sizeof(queue_node));
     new_node->value = new_process;
@@ -85,14 +85,14 @@ process* queue_dequeue(process_queue* queue){
     if (queue->len > 1){
         queue->front->prev->next = NULL;
         queue->front = queue->front->prev;
-        printf("\ndequeue complete - new front is: ");
-        print_process(queue->front->value);
+        //printf("\ndequeue complete - new front is: ");
+        //print_process(queue->front->value);
     }
     
     if (queue->len == 1){
         queue->back = NULL;
         queue->front = NULL;
-        printf("\ndequeue complete - queue is now empty");
+        //printf("\ndequeue complete - queue is now empty");
     }
 
     queue->len -= 1;
@@ -235,7 +235,9 @@ void round_robin(process_queue* incoming_process_queue, int quantum, int memory_
     process_queue* working_queue = construct_queue();
 
     //get first process
+    enqueue_arrived_processes(current_time, working_queue, incoming_process_queue);
     cur_process = queue_dequeue(working_queue);
+    printf("\ncurrent time is %d, process running, id %d, remaining time %d", current_time, cur_process->process_id, cur_process->job_time);
 
     //run until no processes remain
     while (1==1){
@@ -254,19 +256,21 @@ void round_robin(process_queue* incoming_process_queue, int quantum, int memory_
                 if (incoming_process_queue->len != 0){
                     printf("\nwaiting for processes...");
                     current_time += (incoming_process_queue->front->value->time_arrived - current_time);
-                    //load arrived processes and continue
+                    //enqueue arrived processes
                     enqueue_arrived_processes(current_time, working_queue, incoming_process_queue);
-                    cur_process = queue_dequeue(working_queue);
-                    printf("\ncurrent time is %d, process running, id %d, remaining time %d", current_time, cur_process->process_id, cur_process->job_time);
                 }else{
                     //if no jobs exist to work on and no jobs will arrive in the future, return
                     printf("\nall processes complete");
                     return;
                 }
             }
-            //enqueue next job
+            //load next process
             cur_process = queue_dequeue(working_queue);
-            current_time += load_memory(cur_process, memory_manager_type);
+            if (memory_manager_type != MEM_UNLIMITED){
+                current_time += load_memory(cur_process, memory_manager_type);
+            }
+            printf("\ncurrent time is %d, process running, id %d, remaining time %d", current_time, cur_process->process_id, cur_process->job_time);
+            
 
         //if job won't be finished this quantum, shuffle it to the back and select a new job
         }else{
@@ -280,6 +284,9 @@ void round_robin(process_queue* incoming_process_queue, int quantum, int memory_
                 //place process at back of queue and announce return from suspension
                 queue_enqueue(working_queue, cur_process);
                 cur_process = queue_dequeue(working_queue);
+                if (memory_manager_type != MEM_UNLIMITED){
+                    current_time += load_memory(cur_process, memory_manager_type);
+                }
                 printf("\ncurrent time is %d, process running, id %d, remaining time %d", current_time, cur_process->process_id, cur_process->job_time);
             }
         }
@@ -316,6 +323,6 @@ int main(int argc, char** argv){
     //first_come_first_served(incoming_process_queue, MEM_UNLIMITED);
 
     //run round robin scheduler with unlimited memory
-    round_robin(incoming_process_queue, 1, MEM_UNLIMITED);
+    round_robin(incoming_process_queue, 10, MEM_UNLIMITED);
     return 0;
 }
