@@ -283,7 +283,7 @@ void first_come_first_served(process_queue* incoming_process_queue, char memory_
         }
 
         //print generic process start info
-        printf("%lu, RUNNING, id=<%lu>, remaining-time=<%lu>\n", current_time, cur_process->process_id, cur_process->job_time);
+        printf("%lu, RUNNING, id=%lu, remaining-time=%lu\n", current_time, cur_process->process_id, cur_process->job_time);
         
         //load required pages
         if (memory_manager != MEM_UNLIMITED){
@@ -298,7 +298,7 @@ void first_come_first_served(process_queue* incoming_process_queue, char memory_
         n_processes_waiting = processes_waiting(current_time, incoming_process_queue);
 
         //print process complete info
-        printf("%lu, FINISHED, id=<%lu>, proc-remaining=<%lu>\n", current_time, cur_process->process_id, n_processes_waiting);
+        printf("%lu, FINISHED, id=%lu, proc-remaining=%lu\n", current_time, cur_process->process_id, n_processes_waiting);
 
         //get next enqueued process
         cur_process = queue_dequeue(incoming_process_queue);
@@ -347,7 +347,7 @@ void round_robin(process_queue* incoming_process_queue, unsigned long quantum, c
     //get first process
     enqueue_arrived_processes(current_time, working_queue, incoming_process_queue);
     cur_process = queue_dequeue(working_queue);
-    printf("%lu, RUNNING, id=<%lu>, remaining-time=<%lu>\n", current_time, cur_process->process_id, cur_process->job_time);
+    printf("%lu, RUNNING, id=%lu, remaining-time=%lu\n", current_time, cur_process->process_id, cur_process->job_time);
 
     //run until no processes remain
     while (1==1){
@@ -357,7 +357,7 @@ void round_robin(process_queue* incoming_process_queue, unsigned long quantum, c
             current_time += cur_process->job_time;
             cur_process->job_time = 0;
             enqueue_arrived_processes(current_time, working_queue, incoming_process_queue);
-            printf("%lu, FINISHED, id=<%lu>, proc-remaining=<%lu>\n", current_time, cur_process->process_id, working_queue->len);
+            printf("%lu, FINISHED, id=%lu, proc-remaining=%lu\n", current_time, cur_process->process_id, working_queue->len);
 
             //if no jobs can be swapped to, simulate waiting for the next job to arrive
             if (working_queue->len == 0){
@@ -387,7 +387,7 @@ void round_robin(process_queue* incoming_process_queue, unsigned long quantum, c
             if (memory_manager != MEM_UNLIMITED){
                 current_time += load_memory(cur_process, memory_manager);
             }
-            printf("%lu, RUNNING, id=<%lu>, remaining-time=<%lu>\n", current_time, cur_process->process_id, cur_process->job_time);
+            printf("%lu, RUNNING, id=%lu, remaining-time=%lu\n", current_time, cur_process->process_id, cur_process->job_time);
             
 
         //if job won't be finished this quantum, shuffle it to the back and select a new job
@@ -405,7 +405,7 @@ void round_robin(process_queue* incoming_process_queue, unsigned long quantum, c
                 if (memory_manager != MEM_UNLIMITED){
                     current_time += load_memory(cur_process, memory_manager);
                 }
-                printf("%lu, RUNNING, id=<%lu>, remaining-time=<%lu>\n", current_time, cur_process->process_id, cur_process->job_time);
+                printf("%lu, RUNNING, id=%lu, remaining-time=%lu\n", current_time, cur_process->process_id, cur_process->job_time);
             }
         }
         
