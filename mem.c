@@ -4,10 +4,17 @@
 #include "unistd.h" //option processing
 #include "string.h"
 
-//defines
+
+//memory management datatype config
 #define MAX_NUM_PROCESSES 1000
 #define RESIZE_MULTIPLIER 2
 #define PAGE_ARRAY_INIT_SIZE 10
+#define LOADING_COST 2
+
+
+
+//treat max unsigned long as missing value
+#define EMPTY_VALUE 4294967295 //i'm aware that this value of ULONG_MAX isn't guaranteed, fk it tho
 
 //memory config
 #define MEM_UNLIMITED 'u'
@@ -23,8 +30,22 @@
 //debugging
 #define DEBUG 0
 
+
+
+
 //***********************************************************************************************
-//process information struct
+//utility function
+
+unsigned long max(unsigned long a, unsigned long b){
+    if (a >= b){
+        return a; 
+    }
+    return b;
+}
+
+//***********************************************************************************************
+//process information data structure
+
 typedef struct process{
     unsigned long time_arrived;
     unsigned long process_id;
@@ -39,7 +60,7 @@ void print_process(process* target_process){
 
 
 //***********************************************************************************************
-//queue and helper functions
+//queue data structure and helper functions
 
 typedef struct Queue_node queue_node;
 struct Queue_node{
@@ -115,7 +136,8 @@ void print_queue(process_queue* queue){
 
 
 //***********************************************************************************************
-//memory storage datatype
+//memory storage data structures and helper functions
+
 typedef struct Sorted_mem_pages sorted_mem_pages;
 struct Sorted_mem_pages{
     unsigned long len; //number of elements
@@ -131,6 +153,7 @@ sorted_mem_pages* construct_mem_pages(){
     return new_pages;
 }
 
+//maintain reverse sorted order on insertion
 void page_array_insert(sorted_mem_pages* page_storage, int page_number){
     //insert first element
     if (page_storage->len == 0){
@@ -150,7 +173,7 @@ void page_array_insert(sorted_mem_pages* page_storage, int page_number){
         unsigned long high = page_storage->len-1;
         while (low != high){
             mid = low/2 + high/2;
-            if (page_storage->page_array[mid] <= page_number){
+            if (page_storage->page_array[mid] >= page_number){ //use >= rather than <= to search reverse ordered array 
                 low = mid + 1;
             }else{
                 high = mid;
@@ -162,8 +185,12 @@ void page_array_insert(sorted_mem_pages* page_storage, int page_number){
         //reallocate and insert
         //prob have off by 1 bugs here
         if (page_storage->alloced_len < 1 + page_storage->len){
+            //expand allocation, fill with empty values and write over
             unsigned long* new_storage_array = malloc(((page_storage->len + 1) * RESIZE_MULTIPLIER) * sizeof(unsigned long));
             page_storage->alloced_len = (page_storage->len + 1) * RESIZE_MULTIPLIER;
+            for (unsigned long writeover; writeover < page_storage->len+1; writeover++){
+                page_storage->page_array[writeover] = EMPTY_VALUE;
+            }
 
             unsigned long did_insert = 0;
             for (unsigned long i = 0; i < page_storage->len; i++){
@@ -195,6 +222,15 @@ void page_array_insert(sorted_mem_pages* page_storage, int page_number){
 }
 
 
+//always remove last element
+unsigned long page_array_pop_last(sorted_mem_pages* page_storage){
+    unsigned long popped_page = page_storage->page_array[page_storage->len - 1];
+    page_storage->page_array[page_storage->len - 1] = EMPTY_VALUE;
+    page_storage->len -= 1;
+    return popped_page;
+}
+
+
 //hash table (closer to a lookup table as the hashing function is x => x)
 sorted_mem_pages** create_hash_table(){
     sorted_mem_pages** mem_hash_table = malloc((MAX_NUM_PROCESSES) * sizeof(sorted_mem_pages));
@@ -206,45 +242,88 @@ sorted_mem_pages** create_hash_table(){
 }
 
 
-//ez
-void allocate_mem_to_process(sorted_mem_pages** mem_hash_table, unsigned long process_id, unsigned long page_number){
-    page_array_insert(mem_hash_table[process_id], page_number);
+//fill initial memory pool with pages (maintain reverse sorted ordering)
+sorted_mem_pages* populate_free_memory_pool(unsigned long available_memory){
+    sorted_mem_pages* free_memory_pool = construct_mem_pages();
+    unsigned long* page_array = malloc((available_memory/4) * sizeof(unsigned long));
+
+    //ensure initial fill is sorted in reverse order
+    for (unsigned long i = (available_memory/4) - 1; i >= 0; i--){
+        page_array[i] = i;
+    }
+    //ready to output
+    free_memory_pool->len = available_memory/4;
+    free_memory_pool->alloced_len = available_memory/4;
+    free_memory_pool->page_array = page_array;
+    return free_memory_pool;
 }
 
-//***********************************************************************************************
-//hidden to actual assignment, stores incoming data with having to constantly do IO
-process_queue* load_processes(char* filename){
-    //open file
-    FILE* file = fopen(filename, "r");
 
-    //if file open failed
-    if (file == NULL){
-        if (DEBUG){
-            printf("\nnull file, returning...");
+//***********************************************************************************************
+//swapping
+
+unsigned long mem_swap(sorted_mem_pages** mem_hash_table, sorted_mem_pages* free_memory_pool, process_queue* working_queue, unsigned long requesting_process_id, unsigned long pages_required, char memory_manager){
+    //remove least recently executed ? i feel it should be most recently executed but i fill follow the spec!!!
+    queue_node* removal_target_process = working_queue->front;
+    
+    unsigned long page_to_swap;
+    unsigned long pages_swapped = 0;
+    //until enough memory is freed, free all memory allocated single processes
+    while (free_memory_pool->len < pages_required){
+        //remove all pages allocated to this process and attach them to new process
+        while (mem_hash_table[removal_target_process->value->process_id]->len > 0){
+            page_to_swap = page_array_pop_last(mem_hash_table[removal_target_process->value->process_id]);
+            page_array_insert(mem_hash_table[requesting_process_id], page_to_swap);
+            pages_swapped += 1;
+            printf("\nswapped page from %lu to %lu", removal_target_process->value->process_id, requesting_process_id);
         }
-        return NULL;
+        removal_target_process = removal_target_process->prev;
     }
-    
-    //load processes
-    process_queue* incoming_process_queue = construct_queue();
-    for (process* new_process = malloc(sizeof(process)); fscanf(file,"%lu %lu %lu %lu\r\n", &new_process->time_arrived, 
-            &new_process->process_id, &new_process->memory_size_req, 
-            &new_process->job_time) == 4;new_process = malloc(sizeof(process))){
-        //enqueue process
-        queue_enqueue(incoming_process_queue, new_process);
-        
-    }
-    return incoming_process_queue;
+    return pages_swapped;
 }
 
+
 //***********************************************************************************************
-//dummy function so code compiles, replace later
-unsigned long load_memory(process* cur_process, char memory_manager){
-    if (DEBUG){
-        printf("loaded memory...");
+//selects between different memory loading types, returns cost
+unsigned long load_memory(process* requesting_process, sorted_mem_pages** mem_hash_table, sorted_mem_pages* free_memory_pool, process_queue* working_queue, char memory_manager){
+    unsigned long free_page;
+    unsigned long cost;
+    unsigned long initial_pages_required = (requesting_process->memory_size_req / 4) - mem_hash_table[requesting_process->process_id]->len;
+    unsigned long current_pages_required = initial_pages_required;
+
+    //don't need to manage memory when set to unlimited
+    if (memory_manager == MEM_UNLIMITED){
+        return 0;
     }
-    
-    return 0;
+
+    //load pages from free memory until it's exhausted or the program has enough memory requirements
+    //don't add cost as free memory doesn't need any disk stuff
+    while (free_memory_pool->len > 0 && current_pages_required > 0){
+        free_page = page_array_pop_last(free_memory_pool);
+        page_array_insert(mem_hash_table[requesting_process->process_id], free_page);
+        current_pages_required -= 1;
+    }
+
+    //if requirements could be fulfilled from free memory, return early
+    if (current_pages_required == 0){
+        cost = initial_pages_required * LOADING_COST;
+        return cost;
+    }
+
+    //select between memory management methods
+    if (memory_manager == MEM_SWAPPING){
+        if (DEBUG){
+            printf("\nswapping memory...");
+        }
+        mem_swap(mem_hash_table, free_memory_pool, working_queue, requesting_process->process_id, current_pages_required, memory_manager);
+        //only the pages required by the process add to the cost, even if we swap more
+        cost = initial_pages_required * LOADING_COST;
+    }
+    if (memory_manager == MEM_VIRTUAL){
+        printf("\nnot implemented yet...");
+    }
+
+    return cost;
 }
 
 //***********************************************************************************************
@@ -288,7 +367,9 @@ void first_come_first_served(process_queue* incoming_process_queue, char memory_
         
         //load required pages
         if (memory_manager != MEM_UNLIMITED){
-            current_time += load_memory(cur_process, memory_manager);
+            //NEED TO REWRITE SO WORKING QUEUE IS MEANINGFUL HERE
+            //need to do other integration stuff also
+            //current_time += load_memory(cur_process, mem_hash_table, free_memory_pool, working_queue, memory_manager);
         }
         
         //simulate time spent loading pages and running job
@@ -309,13 +390,6 @@ void first_come_first_served(process_queue* incoming_process_queue, char memory_
 
 //***********************************************************************************************
 //round robin scheduler
-
-unsigned long max(unsigned long a, unsigned long b){
-    if (a >= b){
-        return a; 
-    }
-    return b;
-}
 
 void enqueue_arrived_processes(unsigned long current_time, process_queue* working_queue, process_queue* incoming_process_queue){
     if (incoming_process_queue->len == 0){
@@ -386,7 +460,8 @@ void round_robin(process_queue* incoming_process_queue, unsigned long quantum, c
             //load next process
             cur_process = queue_dequeue(working_queue);
             if (memory_manager != MEM_UNLIMITED){
-                current_time += load_memory(cur_process, memory_manager);
+                //need to do integration work on this
+                //current_time += load_memory(cur_process, mem_hash_table, free_memory_pool, working_queue, memory_manager);
             }
             printf("%lu, RUNNING, id=%lu, remaining-time=%lu\n", current_time, cur_process->process_id, cur_process->job_time);
             
@@ -404,7 +479,8 @@ void round_robin(process_queue* incoming_process_queue, unsigned long quantum, c
                 queue_enqueue(working_queue, cur_process);
                 cur_process = queue_dequeue(working_queue);
                 if (memory_manager != MEM_UNLIMITED){
-                    current_time += load_memory(cur_process, memory_manager);
+                    //need to do integration work on this
+                    //current_time += load_memory(cur_process, mem_hash_table, free_memory_pool, working_queue, memory_manager);
                 }
                 printf("%lu, RUNNING, id=%lu, remaining-time=%lu\n", current_time, cur_process->process_id, cur_process->job_time);
             }
@@ -413,18 +489,47 @@ void round_robin(process_queue* incoming_process_queue, unsigned long quantum, c
     }
 }
 
-//TODO!!! ADD LOGIC TO ENQUEUE TO MAINTAIN PROCESS_ID ORDER WITHIN THE QUEUE
+
+//***********************************************************************************************
+//hidden to actual assignment, stores incoming data with having to constantly do IO
+process_queue* load_processes(char* filename){
+    //open file
+    FILE* file = fopen(filename, "r");
+
+    //if file open failed
+    if (file == NULL){
+        if (DEBUG){
+            printf("\nnull file, returning...");
+        }
+        return NULL;
+    }
+    
+    //load processes
+    process_queue* incoming_process_queue = construct_queue();
+    for (process* new_process = malloc(sizeof(process)); fscanf(file,"%lu %lu %lu %lu\r\n", &new_process->time_arrived, 
+            &new_process->process_id, &new_process->memory_size_req, 
+            &new_process->job_time) == 4;new_process = malloc(sizeof(process))){
+        //enqueue process
+        queue_enqueue(incoming_process_queue, new_process);
+        
+    }
+    return incoming_process_queue;
+}
+
 
 //***********************************************************************************************
 int main(int argc, char** argv){
     //disable print buffer
     setvbuf(stdout, NULL, _IONBF, 0);
-
+    if (DEBUG){
+        printf("%lu", EMPTY_VALUE);
+    }
+    
     //get control args
     int opt;
     unsigned long quantum = 0;
     unsigned long memory_size = 0;
-    char memory_allocator = '\0';
+    char memory_manager = '\0';
     char scheduling_algorithm = '\0';
     char* filename = NULL;
     while ((opt = getopt(argc, argv, "f:a:m:s:q:")) != -1){
@@ -447,9 +552,9 @@ int main(int argc, char** argv){
             
         }
         if (opt == 'm'){
-            memory_allocator = optarg[0];
+            memory_manager = optarg[0];
             if (DEBUG){
-                printf("allocator type: %c", memory_allocator);
+                printf("allocator type: %c", memory_manager);
             }
             
         }
@@ -476,7 +581,7 @@ int main(int argc, char** argv){
         }
     }
 
-    if (scheduling_algorithm == '\0' || memory_allocator == '\0' || filename == NULL){
+    if (scheduling_algorithm == '\0' || memory_manager == '\0' || filename == NULL){
         if (DEBUG){
             printf("\na required arg wasn't set... returning");
         }
@@ -505,10 +610,10 @@ int main(int argc, char** argv){
 
     //run round robin scheduler with unlimited memory
     if (scheduling_algorithm == SCHEDULER_RR){
-        round_robin(incoming_process_queue, quantum, memory_allocator);
+        round_robin(incoming_process_queue, quantum, memory_manager);
     }
     if (scheduling_algorithm == SCHEDULER_FCFS){
-        first_come_first_served(incoming_process_queue, memory_allocator);
+        first_come_first_served(incoming_process_queue, memory_manager);
     }
     if (scheduling_algorithm == SCHEDULER_CUSTOM){
         if (DEBUG){
