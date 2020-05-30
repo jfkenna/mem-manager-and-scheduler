@@ -167,39 +167,128 @@ int processes_waiting(int current_time, process_queue* incoming_process_queue){
 
 
 void first_come_first_served(process_queue* incoming_process_queue, int memory_manager_type){
-    int global_time = 0;
-    int load_memory_cost;
+    int current_time = 0;
     int n_processes_waiting;
     process* cur_process = queue_dequeue(incoming_process_queue);
     while (cur_process != NULL){
         //simulate waiting for new process
-        if (cur_process->time_arrived > global_time){
-            global_time += cur_process->time_arrived - global_time;
+        if (cur_process->time_arrived > current_time){
+            printf("\nwaiting for new process...");
+            current_time += cur_process->time_arrived - current_time;
         }
 
         //print generic process start info
-        printf("\ncurrent_time is %d , program running, id %d, remaining time %d", global_time, cur_process->process_id, cur_process->job_time);
+        printf("\ncurrent_time is %d , program running, id %d, remaining time %d", current_time, cur_process->process_id, cur_process->job_time);
         
         //load required pages
-        load_memory_cost = 0;
         if (memory_manager_type != MEM_UNLIMITED){
-            load_memory_cost = load_memory(cur_process, memory_manager_type);
+            current_time += load_memory(cur_process, memory_manager_type);
         }
         
         //simulate time spent loading pages and running job
-        global_time += load_memory_cost + cur_process->job_time;
+        current_time += cur_process->job_time;
+        cur_process->job_time = 0;
 
         //count how many processes are waiting
-        n_processes_waiting = processes_waiting(global_time, incoming_process_queue);
+        n_processes_waiting = processes_waiting(current_time, incoming_process_queue);
 
         //print process complete info
-        printf("\ncurrent time is %d, process complete, id %d, processes remaining %d", global_time, cur_process->process_id, n_processes_waiting);
+        printf("\ncurrent time is %d, process complete, id %d, processes remaining %d", current_time, cur_process->process_id, n_processes_waiting);
 
         //get next enqueued process
         cur_process = queue_dequeue(incoming_process_queue);
     }
 }
 
+
+int max(int a, int b){
+    if (a >= b){
+        return a; 
+    }
+    return b;
+}
+
+
+void enqueue_arrived_processes(int current_time, process_queue* working_queue, process_queue* incoming_process_queue){
+    if (incoming_process_queue->len == 0){
+        printf("\nincoming queue is empty");
+        return;
+    }
+
+    queue_node* cur = incoming_process_queue->front;
+    while (cur != NULL){
+        //swap from incoming processes to working processes if process would have arrived by now
+        if (cur->value->time_arrived <= current_time){
+            queue_enqueue(working_queue, queue_dequeue(incoming_process_queue));
+        }else{
+            return;
+        }
+        cur = incoming_process_queue->front;
+    }
+}
+
+void round_robin(process_queue* incoming_process_queue, int quantum, int memory_manager_type){
+    int current_time = 0;
+    process* cur_process;
+
+    //used to store processes that have actually arrived
+    process_queue* working_queue = construct_queue();
+
+    //get first process
+    cur_process = queue_dequeue(working_queue);
+
+    //run until no processes remain
+    while (1==1){
+        //if job will be finished in this quantum
+        if (cur_process->job_time <= quantum){
+            //update time values and enqueue new processes
+            current_time += cur_process->job_time;
+            cur_process->job_time = 0;
+            enqueue_arrived_processes(current_time, working_queue, incoming_process_queue);
+            printf("\ncurrent time is %d, process complete, id %d, processes remaining %d", current_time, cur_process->process_id, incoming_process_queue->len);
+
+            //if no jobs can be swapped to, simulate waiting for the next job to arrive
+            if (working_queue->len == 0){
+                printf("\nnothing in working queue...");
+                //wait for processes that haven't yet arrived
+                if (incoming_process_queue->len != 0){
+                    printf("\nwaiting for processes...");
+                    current_time += (incoming_process_queue->front->value->time_arrived - current_time);
+                    //load arrived processes and continue
+                    enqueue_arrived_processes(current_time, working_queue, incoming_process_queue);
+                    cur_process = queue_dequeue(working_queue);
+                    printf("\ncurrent time is %d, process running, id %d, remaining time %d", current_time, cur_process->process_id, cur_process->job_time);
+                }else{
+                    //if no jobs exist to work on and no jobs will arrive in the future, return
+                    printf("\nall processes complete");
+                    return;
+                }
+            }
+            //enqueue next job
+            cur_process = queue_dequeue(working_queue);
+            current_time += load_memory(cur_process, memory_manager_type);
+
+        //if job won't be finished this quantum, shuffle it to the back and select a new job
+        }else{
+            //update time values and enqueue new processes
+            current_time += quantum;
+            cur_process->job_time -= quantum;
+            enqueue_arrived_processes(current_time, working_queue, incoming_process_queue);
+
+            //only change process and report change if a new process can be swapped to (in the case that working_queue is 0 after removal of cur_process and addition of new processes, no processes can be swapped to)
+            if (working_queue->len != 0){
+                //place process at back of queue and announce return from suspension
+                queue_enqueue(working_queue, cur_process);
+                cur_process = queue_dequeue(working_queue);
+                printf("\ncurrent time is %d, process running, id %d, remaining time %d", current_time, cur_process->process_id, cur_process->job_time);
+            }
+        }
+        
+    }
+
+}
+
+//TODO!!! ADD LOGIC TO ENQUEUE TO MAINTAIN PROCESS_ID ORDER WITHIN THE QUEUE
 
 //***********************************************************************************************
 int main(int argc, char** argv){
@@ -224,6 +313,9 @@ int main(int argc, char** argv){
     }
 
     //run basic scheduler with unlimited memory
-    first_come_first_served(incoming_process_queue, MEM_UNLIMITED);
+    //first_come_first_served(incoming_process_queue, MEM_UNLIMITED);
+
+    //run round robin scheduler with unlimited memory
+    round_robin(incoming_process_queue, 1, MEM_UNLIMITED);
     return 0;
 }
