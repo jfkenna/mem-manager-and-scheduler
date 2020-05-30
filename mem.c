@@ -19,6 +19,9 @@
 #define SCHEDULER_RR 'r'
 #define SCHEDULER_CUSTOM 'c'
 
+//debugging
+#define DEBUG 0
+
 //***********************************************************************************************
 //process information struct
 typedef struct process{
@@ -61,9 +64,6 @@ process_queue* construct_queue(){
 }
 
 void queue_enqueue(process_queue* queue, process* new_process){
-    //printf("\nenqueuing/");
-    //print_process(new_process);
-    //create new node
     queue_node* new_node = malloc(sizeof(queue_node));
     new_node->value = new_process;
     new_node->prev = NULL;
@@ -88,14 +88,11 @@ process* queue_dequeue(process_queue* queue){
     if (queue->len > 1){
         queue->front->prev->next = NULL;
         queue->front = queue->front->prev;
-        //printf("\ndequeue complete - new front is: ");
-        //print_process(queue->front->value);
     }
     
     if (queue->len == 1){
         queue->back = NULL;
         queue->front = NULL;
-        //printf("\ndequeue complete - queue is now empty");
     }
 
     queue->len -= 1;
@@ -221,7 +218,9 @@ process_queue* load_processes(char* filename){
 
     //if file open failed
     if (file == NULL){
-        printf("\nnull file, returning...");
+        if (DEBUG){
+            printf("\nnull file, returning...");
+        }
         return NULL;
     }
     
@@ -240,7 +239,10 @@ process_queue* load_processes(char* filename){
 //***********************************************************************************************
 //dummy function so code compiles, replace later
 unsigned long load_memory(process* cur_process, char memory_manager){
-    printf("loaded memory...");
+    if (DEBUG){
+        printf("loaded memory...");
+    }
+    
     return 0;
 }
 
@@ -273,12 +275,15 @@ void first_come_first_served(process_queue* incoming_process_queue, char memory_
     while (cur_process != NULL){
         //simulate waiting for new process
         if (cur_process->time_arrived > current_time){
-            printf("\nwaiting for new process...");
+            if (DEBUG){
+                printf("\nwaiting for new process...");
+            }
+            
             current_time += cur_process->time_arrived - current_time;
         }
 
         //print generic process start info
-        printf("\ncurrent_time is %lu , program running, id %lu, remaining time %lu", current_time, cur_process->process_id, cur_process->job_time);
+        printf("%lu, RUNNING, id=<%lu>, remaining-time=<%lu>\n", current_time, cur_process->process_id, cur_process->job_time);
         
         //load required pages
         if (memory_manager != MEM_UNLIMITED){
@@ -293,7 +298,7 @@ void first_come_first_served(process_queue* incoming_process_queue, char memory_
         n_processes_waiting = processes_waiting(current_time, incoming_process_queue);
 
         //print process complete info
-        printf("\ncurrent time is %lu, process complete, id %lu, processes remaining %lu", current_time, cur_process->process_id, n_processes_waiting);
+        printf("%lu, FINISHED, id=<%lu>, proc-remaining=<%lu>\n", current_time, cur_process->process_id, n_processes_waiting);
 
         //get next enqueued process
         cur_process = queue_dequeue(incoming_process_queue);
@@ -313,7 +318,10 @@ unsigned long max(unsigned long a, unsigned long b){
 
 void enqueue_arrived_processes(unsigned long current_time, process_queue* working_queue, process_queue* incoming_process_queue){
     if (incoming_process_queue->len == 0){
-        printf("\nincoming queue is empty");
+        if (DEBUG){
+            printf("\nincoming queue is empty");
+        }
+        
         return;
     }
 
@@ -339,7 +347,7 @@ void round_robin(process_queue* incoming_process_queue, unsigned long quantum, c
     //get first process
     enqueue_arrived_processes(current_time, working_queue, incoming_process_queue);
     cur_process = queue_dequeue(working_queue);
-    printf("\ncurrent time is %lu, process running, id %lu, remaining time %lu", current_time, cur_process->process_id, cur_process->job_time);
+    printf("%lu, RUNNING, id=<%lu>, remaining-time=<%lu>\n", current_time, cur_process->process_id, cur_process->job_time);
 
     //run until no processes remain
     while (1==1){
@@ -349,20 +357,28 @@ void round_robin(process_queue* incoming_process_queue, unsigned long quantum, c
             current_time += cur_process->job_time;
             cur_process->job_time = 0;
             enqueue_arrived_processes(current_time, working_queue, incoming_process_queue);
-            printf("\ncurrent time is %lu, process complete, id %lu, processes remaining %lu", current_time, cur_process->process_id, incoming_process_queue->len);
+            printf("%lu, FINISHED, id=<%lu>, proc-remaining=<%lu>\n", current_time, cur_process->process_id, working_queue->len);
 
             //if no jobs can be swapped to, simulate waiting for the next job to arrive
             if (working_queue->len == 0){
-                printf("\nnothing in working queue...");
+                if (DEBUG){
+                    printf("\nnothing in working queue...");
+                }
+                
                 //wait for processes that haven't yet arrived
                 if (incoming_process_queue->len != 0){
-                    printf("\nwaiting for processes...");
+                    if (DEBUG){
+                        printf("\nwaiting for processes...");
+                    }
+                    
                     current_time += (incoming_process_queue->front->value->time_arrived - current_time);
                     //enqueue arrived processes
                     enqueue_arrived_processes(current_time, working_queue, incoming_process_queue);
                 }else{
                     //if no jobs exist to work on and no jobs will arrive in the future, return
-                    printf("\nall processes complete");
+                    if (DEBUG){
+                        printf("\nall processes complete");
+                    }                    
                     return;
                 }
             }
@@ -371,7 +387,7 @@ void round_robin(process_queue* incoming_process_queue, unsigned long quantum, c
             if (memory_manager != MEM_UNLIMITED){
                 current_time += load_memory(cur_process, memory_manager);
             }
-            printf("\ncurrent time is %lu, process running, id %lu, remaining time %lu", current_time, cur_process->process_id, cur_process->job_time);
+            printf("%lu, RUNNING, id=<%lu>, remaining-time=<%lu>\n", current_time, cur_process->process_id, cur_process->job_time);
             
 
         //if job won't be finished this quantum, shuffle it to the back and select a new job
@@ -389,7 +405,7 @@ void round_robin(process_queue* incoming_process_queue, unsigned long quantum, c
                 if (memory_manager != MEM_UNLIMITED){
                     current_time += load_memory(cur_process, memory_manager);
                 }
-                printf("\ncurrent time is %lu, process running, id %lu, remaining time %lu", current_time, cur_process->process_id, cur_process->job_time);
+                printf("%lu, RUNNING, id=<%lu>, remaining-time=<%lu>\n", current_time, cur_process->process_id, cur_process->job_time);
             }
         }
         
@@ -411,46 +427,78 @@ int main(int argc, char** argv){
     char scheduling_algorithm = '\0';
     char* filename = NULL;
     while ((opt = getopt(argc, argv, "f:a:m:s:q::")) != -1){
-        printf("\nnew param - ");
+        if (DEBUG){
+            printf("\nnew param - ");
+        }
+        
         if (opt == 'f'){
             filename = optarg;
-            printf("filename: %s", filename);
+            if (DEBUG){
+                printf("filename: %s", filename);
+            }
+            
         }
         if (opt == 'a'){
             scheduling_algorithm = optarg[0];
-            printf("scheduling algorithm: %c", scheduling_algorithm);
+            if (DEBUG){
+                printf("scheduling algorithm: %c", scheduling_algorithm);
+            }
+            
         }
         if (opt == 'm'){
             memory_allocator = optarg[0];
-            printf("allocator type: %c", memory_allocator);
+            if (DEBUG){
+                printf("allocator type: %c", memory_allocator);
+            }
+            
         }
         if (opt == 's'){
             memory_size = (unsigned long)*optarg;
-            printf("memory size: %lu", memory_size);
+            if (DEBUG){
+                printf("memory size: %lu", memory_size);
+            }
+            
         }
         if (opt == 'q'){
             quantum = (unsigned long)*optarg;
-            printf("quantum: %lu", quantum);
+            if (DEBUG){
+                printf("quantum: %lu", quantum);
+            }
+            
         }
         if (opt == '?'){
-            printf("1 or more args not recognised... returning");
+            if (DEBUG){
+                printf("1 or more args not recognised... returning");
+            }
+            
             return 1;
         }
     }
 
     if (scheduling_algorithm == '\0' || memory_allocator == '\0' || filename == NULL || memory_size == 0){
-        printf("\nan arg was unset or memory size was 0... returning");
+        if (DEBUG){
+            printf("\nan arg was unset or memory size was 0... returning");
+        }
+        
         return 1;
     }
 
     //read data
-    printf("\nattempting to read file: \"%s\"", filename);
+    if (DEBUG){
+        printf("\nattempting to read file: \"%s\"", filename);
+    }
+    
     process_queue* incoming_process_queue = load_processes(filename);
-    print_queue(incoming_process_queue);
+    if (DEBUG){
+        print_queue(incoming_process_queue);
+    }
+    
 
     //handle errors during read
     if (incoming_process_queue->len == 0){
-        printf("error during file read... returning...");
+        if (DEBUG){
+            printf("error during file read... returning...");
+        }
         return 1;
     }
 
@@ -462,7 +510,9 @@ int main(int argc, char** argv){
         first_come_first_served(incoming_process_queue, memory_allocator);
     }
     if (scheduling_algorithm == SCHEDULER_CUSTOM){
-        printf("custom scheduler is not yet implemented yet");
+        if (DEBUG){
+            printf("custom scheduler is not yet implemented yet");
+        }
     }
     
     return 0;
