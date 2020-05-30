@@ -2,6 +2,7 @@
 #include "stdio.h"
 #include "stdlib.h"
 #include "unistd.h" //option processing
+#include "string.h"
 
 //defines
 #define MAX_NUM_PROCESSES 1000
@@ -20,7 +21,7 @@
 #define SCHEDULER_CUSTOM 'c'
 
 //debugging
-#define DEBUG 1
+#define DEBUG 0
 
 //***********************************************************************************************
 //process information struct
@@ -426,7 +427,7 @@ int main(int argc, char** argv){
     char memory_allocator = '\0';
     char scheduling_algorithm = '\0';
     char* filename = NULL;
-    while ((opt = getopt(argc, argv, "f:a:m:s::q::")) != -1){
+    while ((opt = getopt(argc, argv, "f:a:m:s:q:")) != -1){
         if (DEBUG){
             printf("\nnew param - ");
         }
@@ -453,14 +454,14 @@ int main(int argc, char** argv){
             
         }
         if (opt == 's'){
-            memory_size = (unsigned long)*optarg;
+            memory_size = strtoul(optarg, NULL, 0);
             if (DEBUG){
                 printf("memory size: %lu", memory_size);
             }
             
         }
         if (opt == 'q'){
-            quantum = (unsigned long)*optarg;
+            quantum = strtoul(optarg, NULL, 0);
             if (DEBUG){
                 printf("quantum: %lu", quantum);
             }
