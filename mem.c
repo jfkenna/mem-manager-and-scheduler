@@ -195,8 +195,8 @@ void page_array_insert(sorted_mem_pages* page_storage, int page_number){
 
 
 //hash table (closer to a lookup table as the hashing function is x => x)
-sorted_mem_pages* create_hash_table(){
-    sorted_mem_pages* mem_hash_table = malloc((MAX_NUM_PROCESSES) * sizeof(sorted_mem_pages));
+sorted_mem_pages** create_hash_table(){
+    sorted_mem_pages** mem_hash_table = malloc((MAX_NUM_PROCESSES) * sizeof(sorted_mem_pages));
     //populate hash table with empty lists
     for (unsigned long i = 0; i < MAX_NUM_PROCESSES; i++){
         mem_hash_table[i] = construct_mem_pages();
@@ -205,12 +205,10 @@ sorted_mem_pages* create_hash_table(){
 }
 
 
-void allocate_mem_to_process(memlist** mem_hash_table, unsigned long process_id, unsigned long page_number){
-    mem_hash_table[process_id]
+//ez
+void allocate_mem_to_process(sorted_mem_pages** mem_hash_table, unsigned long process_id, unsigned long page_number){
+    page_array_insert(mem_hash_table[process_id], page_number);
 }
-
-//get 
-
 
 //***********************************************************************************************
 //hidden to actual assignment, stores incoming data with having to constantly do IO
