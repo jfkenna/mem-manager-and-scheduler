@@ -426,7 +426,7 @@ int main(int argc, char** argv){
     char memory_allocator = '\0';
     char scheduling_algorithm = '\0';
     char* filename = NULL;
-    while ((opt = getopt(argc, argv, "f:a:m:s:q::")) != -1){
+    while ((opt = getopt(argc, argv, "f:a:m:s::q::")) != -1){
         if (DEBUG){
             printf("\nnew param - ");
         }
@@ -475,9 +475,9 @@ int main(int argc, char** argv){
         }
     }
 
-    if (scheduling_algorithm == '\0' || memory_allocator == '\0' || filename == NULL || memory_size == 0){
+    if (scheduling_algorithm == '\0' || memory_allocator == '\0' || filename == NULL){
         if (DEBUG){
-            printf("\nan arg was unset or memory size was 0... returning");
+            printf("\na required arg wasn't set... returning");
         }
         
         return 1;
