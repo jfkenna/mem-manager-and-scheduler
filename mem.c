@@ -483,9 +483,11 @@ void first_come_first_served(process_queue* incoming_process_queue, sorted_mem_p
         current_time += cur_process->job_time;
         cur_process->job_time = 0;
 
-        //print process complete info
-        process_complete_evict(free_memory_pool, mem_hash_table[cur_process->process_id], current_time);
-
+        //evict if necessary
+        if (memory_manager != MEM_UNLIMITED){
+            process_complete_evict(free_memory_pool, mem_hash_table[cur_process->process_id], current_time);
+        }
+        
         //prepare for next iteration and update
         enqueue_arrived_processes(current_time, working_queue, incoming_process_queue);
         printf("%lu, FINISHED, id=%lu, proc-remaining=%lu\n", current_time, cur_process->process_id, working_queue->len);
@@ -549,7 +551,9 @@ void round_robin(process_queue* incoming_process_queue, sorted_mem_pages* free_m
             current_time += cur_process->job_time;
             cur_process->job_time = 0;
             enqueue_arrived_processes(current_time, working_queue, incoming_process_queue);
-            process_complete_evict(free_memory_pool, mem_hash_table[cur_process->process_id], current_time);
+            if (memory_manager == MEM_UNLIMITED){
+                process_complete_evict(free_memory_pool, mem_hash_table[cur_process->process_id], current_time);
+            }
             printf("%lu, FINISHED, id=%lu, proc-remaining=%lu\n", current_time, cur_process->process_id, working_queue->len);
 
             //if no jobs can be swapped to, simulate waiting for the next job to arrive
