@@ -10,7 +10,7 @@
 #define RESIZE_MULTIPLIER 2
 #define PAGE_ARRAY_INIT_SIZE 10
 #define LOADING_COST 2
-
+#define EVICT_ALL 0
 
 
 //treat max unsigned long as missing value
@@ -34,11 +34,18 @@
 
 
 //***********************************************************************************************
-//utility function
+//utility functions
 
 unsigned long max(unsigned long a, unsigned long b){
     if (a >= b){
         return a; 
+    }
+    return b;
+}
+
+unsigned long min(unsigned long a, unsigned long b){
+    if (a <= b){
+        return a;
     }
     return b;
 }
@@ -260,7 +267,7 @@ unsigned long page_array_pop_last(sorted_mem_pages* page_storage){
 }
 
 //complete eviction
-void process_complete_evict(sorted_mem_pages* free_memory_pool, sorted_mem_pages* page_storage, unsigned long current_time){
+void process_evict(sorted_mem_pages* free_memory_pool, sorted_mem_pages* page_storage, unsigned long n_pages_to_keep, unsigned long current_time){
     unsigned long freed_page;
     if (page_storage->len == 0){
         printf("\n\n===========TRYING TO EVIC PROCESS WITH 0 PAGES ALLOCATED\n\n");
@@ -273,7 +280,7 @@ void process_complete_evict(sorted_mem_pages* free_memory_pool, sorted_mem_pages
     while (1){ 
         freed_page = page_array_pop_last(page_storage);
         page_array_insert(free_memory_pool, freed_page);
-        if (page_storage->len == 0){
+        if (page_storage->len == n_pages_to_keep){
             printf("%lu]\n", freed_page);
             break;
         }else{
@@ -281,6 +288,7 @@ void process_complete_evict(sorted_mem_pages* free_memory_pool, sorted_mem_pages
         }
     }
 }
+
 
 //hash table (closer to a lookup table as the hashing function is x => x)
 sorted_mem_pages** create_hash_table(){
@@ -324,12 +332,21 @@ unsigned long mem_swap(sorted_mem_pages** mem_hash_table, sorted_mem_pages* free
         return 0;
     }
     
+
+    //how many pages to keep in process we are evicting from
+    unsigned long n_pages_to_keep;
+
     //until enough memory is freed, free all memory allocated single processes
     queue_node* removal_target_process = working_queue->front;
     while (free_memory_pool->len < pages_required && removal_target_process != NULL){
         if (memory_manager != MEM_UNLIMITED){
             if (mem_hash_table[removal_target_process->value->process_id]->len > 0){
-                process_complete_evict(free_memory_pool, mem_hash_table[removal_target_process->value->process_id], current_time);
+                if (memory_manager == MEM_SWAPPING){
+                    n_pages_to_keep = EVICT_ALL;
+                }else{
+                    n_pages_to_keep = min(4, (removal_target_process->value->memory_size_req / 4));
+                }
+                process_evict(free_memory_pool, mem_hash_table[removal_target_process->value->process_id], n_pages_to_keep, current_time);
             }
         }
         removal_target_process = removal_target_process->prev;
@@ -349,10 +366,6 @@ unsigned long mem_swap(sorted_mem_pages** mem_hash_table, sorted_mem_pages* free
     }
     return pages_swapped;
 }
-
-
-//***********************************************************************************************
-//virtual memory
 
 
 //***********************************************************************************************
@@ -394,13 +407,8 @@ unsigned long load_memory(process* requesting_process, sorted_mem_pages** mem_ha
         return cost;
     }
 
-    //select between memory management methods
-    if (memory_manager == MEM_SWAPPING){
-        cost =  mem_swap(mem_hash_table, free_memory_pool, working_queue, requesting_process->process_id, current_pages_required, current_time, memory_manager) * LOADING_COST;
-    }
-    if (memory_manager == MEM_VIRTUAL){
-        printf("not implemented yet...\n");
-    }
+    //swap memory as required
+    cost =  mem_swap(mem_hash_table, free_memory_pool, working_queue, requesting_process->process_id, current_pages_required, current_time, memory_manager) * LOADING_COST;
 
     return cost;
 }
@@ -473,7 +481,7 @@ void first_come_first_served(process_queue* incoming_process_queue, sorted_mem_p
 
         //evict if necessary
         if (memory_manager != MEM_UNLIMITED){
-            process_complete_evict(free_memory_pool, mem_hash_table[cur_process->process_id], current_time);
+            process_evict(free_memory_pool, mem_hash_table[cur_process->process_id], EVICT_ALL, current_time);
         }
         
         //prepare for next iteration and update
@@ -540,7 +548,7 @@ void round_robin(process_queue* incoming_process_queue, sorted_mem_pages* free_m
             cur_process->job_time = 0;
             enqueue_arrived_processes(current_time, working_queue, incoming_process_queue);
             if (memory_manager != MEM_UNLIMITED){
-                process_complete_evict(free_memory_pool, mem_hash_table[cur_process->process_id], current_time);
+                process_evict(free_memory_pool, mem_hash_table[cur_process->process_id], EVICT_ALL, current_time);
             }
             printf("%lu, FINISHED, id=%lu, proc-remaining=%lu\n", current_time, cur_process->process_id, working_queue->len);
 
