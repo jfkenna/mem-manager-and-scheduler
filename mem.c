@@ -335,8 +335,8 @@ unsigned long mem_swap(sorted_mem_pages** mem_hash_table, sorted_mem_pages* free
         return 0;
     }
 
-    //printf("\nfree memory len before swap: %lu", free_memory_pool->len);
-    //printf("\npages required: %lu", pages_required);
+    printf("free memory len before swap: %lu\n", free_memory_pool->len);
+    printf("pages required: %lu\n", pages_required);
 
     //how many pages to keep in process we are evicting from
     unsigned long n_pages_to_keep;
@@ -388,6 +388,9 @@ unsigned long load_memory(process* requesting_process, sorted_mem_pages** mem_ha
     unsigned long initial_pages_required = (requesting_process->memory_size_req / 4) - mem_hash_table[requesting_process->process_id]->len;
     unsigned long current_pages_required = initial_pages_required;
 
+    //printf("\nTOT PAGES REQUIRED %lu", (requesting_process->memory_size_req / 4));
+    //printf("\nCUR PAGES %lu", mem_hash_table[requesting_process->process_id]->len);
+    //printf("\nINIT PAGES REQUIRED %lu", initial_pages_required);
     //don't need to manage memory when set to unlimited
     if (memory_manager == MEM_UNLIMITED){
         return 0;
@@ -410,6 +413,7 @@ unsigned long load_memory(process* requesting_process, sorted_mem_pages** mem_ha
         page_array_insert(mem_hash_table[requesting_process->process_id], free_page);
         current_pages_required -= 1;
     }
+    
 
     //if requirements could be fulfilled from free memory, return early
     if (current_pages_required == 0){
@@ -419,8 +423,8 @@ unsigned long load_memory(process* requesting_process, sorted_mem_pages** mem_ha
 
     //swap memory as required
     if (memory_manager == MEM_VIRTUAL){
-        current_pages_required = min(4, process_page_req - mem_hash_table[requesting_process->process_id]->len);
-        //printf("\nprocess requires %lu pages", current_pages_required);
+        current_pages_required = 4 - min(4, initial_pages_required - current_pages_required);
+        printf("process requires %lu pages\n", current_pages_required);
     }
     cost =  mem_swap(mem_hash_table, free_memory_pool, working_queue, requesting_process->process_id, current_pages_required, current_time, memory_manager) * LOADING_COST;
     return cost;
