@@ -490,10 +490,13 @@ void round_robin(process_queue* incoming_process_queue, sorted_mem_pages* free_m
 
     //used to store processes that have actually arrived
     process_queue* working_queue = construct_queue();
-
-    //get first process
     enqueue_arrived_processes(current_time, working_queue, incoming_process_queue);
+
+    //set first process and load memory
     cur_process = queue_dequeue(working_queue);
+    if (memory_manager != MEM_UNLIMITED){
+        current_time += load_memory(cur_process, mem_hash_table, free_memory_pool, working_queue, memory_manager);
+    }
     printf("%lu, RUNNING, id=%lu, remaining-time=%lu\n", current_time, cur_process->process_id, cur_process->job_time);
 
     //run until no processes remain
