@@ -564,7 +564,7 @@ void first_come_first_served(process_queue* incoming_process_queue, sorted_mem_p
             cur_process->job_time += (cur_process->memory_size_req/4 - mem_hash_table[cur_process->process_id]->len);
 
             //print evicts
-            page_array_pop_last(temp_evicted_pages);
+            print_evict(temp_evicted_pages, current_time);
         }
         process_running_print(current_time, mem_hash_table, free_memory_pool, memory_size, cur_process, load_cost, memory_manager);
         current_time += load_cost; //load cost is always 0 for mem_unlimited
