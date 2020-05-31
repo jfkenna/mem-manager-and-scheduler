@@ -262,19 +262,20 @@ unsigned long page_array_pop_last(sorted_mem_pages* page_storage){
 //complete eviction
 void process_complete_evict(sorted_mem_pages* free_memory_pool, sorted_mem_pages* page_storage, unsigned long current_time){
     unsigned long freed_page;
+    if (page_storage->len == 1){
+        printf("%lu, EVICTED, mem-addresses=[%lu]\n", current_time, page_array_pop_last(page_storage));
+        return;
+    }
     printf("%lu, EVICTED, mem-addresses=[", current_time);
-    //weird loop is due to over issues with unsigned long
-    unsigned long i = page_storage->len- 1;
     while (1){ 
         freed_page = page_array_pop_last(page_storage);
         page_array_insert(free_memory_pool, freed_page);
-        if (i == 0){
+        if (page_storage->len == 1){
             printf("%lu]\n", freed_page);
             break;
         }else{
             printf("%lu,", freed_page);
         }
-        i -= 1;
     }
 }
 
