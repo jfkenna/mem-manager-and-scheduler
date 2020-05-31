@@ -280,10 +280,6 @@ void process_evict(sorted_mem_pages* free_memory_pool, sorted_mem_pages* page_st
         printf("\n\n===========TRYING TO EVIC PROCESS WITH 0 PAGES ALLOCATED\n\n");
         return;
     }
-    if (page_storage->len == 1){
-        printf("%lu, EVICTED, mem-addresses=[%lu]\n", current_time, page_array_pop_last(page_storage));
-        return;
-    }
     printf("%lu, EVICTED, mem-addresses=[", current_time);
     while (1){ 
         freed_page = page_array_pop_last(page_storage);
@@ -344,33 +340,40 @@ unsigned long mem_swap(sorted_mem_pages** mem_hash_table, sorted_mem_pages* free
 
     //how many pages to keep in process we are evicting from
     unsigned long n_pages_to_keep;
+    unsigned long total_pages_required = pages_required;
 
     //until enough memory is freed, free all memory allocated single processes
     queue_node* removal_target_process = working_queue->front;
-    while (free_memory_pool->len < pages_required && removal_target_process != NULL){
+    while (pages_required > 0 && removal_target_process != NULL){
         if (memory_manager != MEM_UNLIMITED){
             //printf("\nchecking if pid %lu has alloced mem we can take...", removal_target_process->value->process_id);
             if (mem_hash_table[removal_target_process->value->process_id]->len > 0){
-                //printf(" found memory");
+                //printf(" found %lu pages", mem_hash_table[removal_target_process->value->process_id]->len);
                 if (memory_manager == MEM_SWAPPING){
                     n_pages_to_keep = EVICT_ALL;
+                    pages_required -= mem_hash_table[removal_target_process->value->process_id]->len - n_pages_to_keep;
                 }else{
                     n_pages_to_keep = max(mem_hash_table[removal_target_process->value->process_id]->len, pages_required) - pages_required;
+                    pages_required -= mem_hash_table[removal_target_process->value->process_id]->len - n_pages_to_keep;
                 }
                 process_evict(free_memory_pool, mem_hash_table[removal_target_process->value->process_id], n_pages_to_keep, current_time);
             }
         }
+        //printf("free mem pages after evict: %lu\n", free_memory_pool->len);
         removal_target_process = removal_target_process->prev;
     }
-    //printf("||");
 
 
     //load memory into processs
     unsigned long pages_swapped = 0;
     unsigned long swap_page;
-    while (pages_swapped < pages_required){
+    //printf("pages required %lu\n", total_pages_required);
+    //printf("free mem pages %lu\n", free_memory_pool->len);
+    while (pages_swapped < total_pages_required){
+        //printf("%lu\n", free_memory_pool->len);
         swap_page = page_array_pop_last(free_memory_pool);
         page_array_insert(mem_hash_table[requesting_process_id], swap_page);
+        //printf("process now has %lu pages\n", mem_hash_table[requesting_process_id]->len);
         pages_swapped += 1;
     }
     return pages_swapped;
