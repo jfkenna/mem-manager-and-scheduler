@@ -443,12 +443,14 @@ unsigned long load_memory(process* requesting_process, sorted_mem_pages** mem_ha
     //swap memory as required
     //idk if this early swap section even works, as it doesn't come up in the test cases as far as i can tell
     unsigned long early_swap = 0;
+    unsigned long pages_to_get = (initial_pages_required - mem_hash_table[requesting_process->process_id]->len);
     if (memory_manager == MEM_VIRTUAL){
         
         early_swap = initial_pages_required - current_pages_required;
         //printf("early swap size of %lu\n", early_swap);
+        pages_to_get = 4 - mem_hash_table[requesting_process->process_id]->len;
     }
-    cost =  (early_swap + mem_swap(mem_hash_table, free_memory_pool, working_queue, requesting_process->process_id, (4 - mem_hash_table[requesting_process->process_id]->len), current_time, memory_manager, temp_evicted_pages)) * LOADING_COST;
+    cost =  (early_swap + mem_swap(mem_hash_table, free_memory_pool, working_queue, requesting_process->process_id, pages_to_get, current_time, memory_manager, temp_evicted_pages)) * LOADING_COST;
     return cost;
 }
 
