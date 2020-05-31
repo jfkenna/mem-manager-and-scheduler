@@ -28,7 +28,7 @@
 #define SCHEDULER_CUSTOM 'c'
 
 //debugging
-#define DEBUG 1
+#define DEBUG 0
 
 
 
@@ -159,7 +159,10 @@ void page_array_insert(sorted_mem_pages* page_storage, unsigned long page_number
     }
     //insert first element
     if (page_storage->len == 0){
-        printf("\ninserting as first element");
+        if (DEBUG){
+            printf("\ninserting as first element");
+        }
+        
         //set initial size
         if (page_storage->alloced_len == 0){
             page_storage->page_array = malloc(PAGE_ARRAY_INIT_SIZE * sizeof(unsigned long));
@@ -168,12 +171,6 @@ void page_array_insert(sorted_mem_pages* page_storage, unsigned long page_number
         page_storage->page_array[0] = page_number;
         page_storage->len = 1;
     }else{
-        printf("\nARRAY WE ARE INSERTING INTO: ");
-        for (unsigned long ccC = 0; ccC < page_storage->len; ccC++){
-                printf("%lu->", page_storage->page_array[ccC]);
-            }
-        printf("END\n");
-
         //=================================================================================
         //the following binary search for insertion location is a modified form of code obtained from
         //https://stackoverflow.com/questions/24868637/inserting-in-to-an-ordered-array-using-binary-search
@@ -189,8 +186,6 @@ void page_array_insert(sorted_mem_pages* page_storage, unsigned long page_number
             }
         }
         unsigned long insert_index = low;
-        printf("\nactual index to insert to is %lu", insert_index);
-        printf("\nlow %lu high %lu mid %lu", low, high, mid);
         //=============================end modified code===================================
 
         if (DEBUG){
@@ -198,7 +193,10 @@ void page_array_insert(sorted_mem_pages* page_storage, unsigned long page_number
         }
         //if not enough memory has been allocated, reallocate and insert
         if (page_storage->alloced_len < 1 + page_storage->len){
-            printf("\n=====================REALLOC=====================");
+            if (DEBUG){
+                printf("\n=====================REALLOC=====================");
+            }
+            
             //expand allocation, fill with empty values
             unsigned long* new_storage_array = malloc((page_storage->len * RESIZE_MULTIPLIER) * sizeof(unsigned long));
             page_storage->alloced_len = page_storage->len * RESIZE_MULTIPLIER;
@@ -211,11 +209,14 @@ void page_array_insert(sorted_mem_pages* page_storage, unsigned long page_number
                 if (i == insert_index){
                     insert_offset = 1;
                 }
-                printf("\nrealloc[%lu] = [%lu]", i+insert_offset, i);
+                
                 new_storage_array[i+insert_offset] = page_storage->page_array[i]; 
             }
             new_storage_array[insert_index] = page_number;
-            printf("\n======================page array after realloc and insertion of page #%lu: ", page_number);
+            if (DEBUG){
+                printf("\n======================page array after realloc and insertion of page #%lu: ", page_number);
+            }
+            
             //free(page_storage->page_array);
             page_storage->page_array = new_storage_array;
         }else{
@@ -223,9 +224,7 @@ void page_array_insert(sorted_mem_pages* page_storage, unsigned long page_number
 
             //shift over values to make room for new addition
             unsigned long j = page_storage->len-1;
-            printf("j = %lu", j);
             while (j >= insert_index){
-                printf("\n[%lu] = [%lu]", j+1, j);
                 page_storage->page_array[j+1] = page_storage->page_array[j];
                 //avoid overflow from unsigned variable j falling to -1
                 if (j == 0){
@@ -260,6 +259,12 @@ unsigned long page_array_pop_last(sorted_mem_pages* page_storage){
     return popped_page;
 }
 
+//complete eviction
+void evict(sorted_mem_pages* free_memory_pool, sorted_mem_pages* page_storage){
+    while (page_storage->len > 0){
+        page_array_insert(free_memory_pool, page_array_pop_last(page_storage));
+    }
+}
 
 //hash table (closer to a lookup table as the hashing function is x => x)
 sorted_mem_pages** create_hash_table(){
@@ -307,17 +312,17 @@ unsigned long mem_swap(sorted_mem_pages** mem_hash_table, sorted_mem_pages* free
     
     unsigned long page_to_swap;
     unsigned long pages_swapped = 0;
+
+    if (DEBUG){
+        printf("\nrequesting pid %lu is missing %lu pages", requesting_process_id, pages_required);
+    }
+    
     //until enough memory is freed, free all memory allocated single processes
     while (free_memory_pool->len < pages_required && removal_target_process != NULL){
         //remove all pages allocated to this process and attach them to new process (or to free pool if process has met memory requirements)
         while (mem_hash_table[removal_target_process->value->process_id]->len > 0){
-            printf("\npid %lu contains - ", requesting_process_id);
-            for (unsigned long zzz = 0; zzz < mem_hash_table[requesting_process_id]->len; zzz++){
-                printf("%lu,", mem_hash_table[requesting_process_id]->page_array[zzz]);
-            }
             page_to_swap = page_array_pop_last(mem_hash_table[removal_target_process->value->process_id]);
             if (pages_swapped < pages_required){
-                printf("INSERT INTO OTHER PROCESS");
                 page_array_insert(mem_hash_table[requesting_process_id], page_to_swap);
                 pages_swapped += 1;
                 if (DEBUG){
@@ -325,18 +330,23 @@ unsigned long mem_swap(sorted_mem_pages** mem_hash_table, sorted_mem_pages* free
                 }
             }else{
                 //place memory back into free pool
-                printf("INSERT INTO FREE MEMORY POOL");
+                if (DEBUG){
+                    printf("INSERT INTO FREE MEMORY POOL");
+                }
+                
                 page_array_insert(free_memory_pool, page_to_swap);
                 if (DEBUG){
                     printf("swapped page #%lu from pid %lu back to free memory pool\n", page_to_swap, removal_target_process->value->process_id);
                 }
             }
-
         }
         removal_target_process = removal_target_process->prev;
+        if (DEBUG){
+            printf("swap in progress... %lu/%lu", pages_swapped, pages_required);
+        }
     }
     if (pages_swapped != pages_required){
-        printf("not enough memory, even after freeing after processes. i don't have handling for this!\n");
+        printf("not enough memory, even after freeing other processes. i don't have handling for this!\n");
     }
     return pages_swapped;
 }
@@ -359,12 +369,15 @@ unsigned long load_memory(process* requesting_process, sorted_mem_pages** mem_ha
     //don't add cost as free memory doesn't need any disk stuff
     while (free_memory_pool->len > 0 && current_pages_required > 0){
         free_page = page_array_pop_last(free_memory_pool);
-        printf("\nLOADING PAGE #%lu FROM FREE MEMORY POOL", free_page);
-        printf(" -after the pop, the FREE pool contains:");
-        for (unsigned long cc = 0; cc < free_memory_pool->len; cc++){
-            printf("%lu->", free_memory_pool->page_array[cc]);
+        if (DEBUG){
+            printf("\nLOADING PAGE #%lu FROM FREE MEMORY POOL", free_page);
+            printf(" -AFTER POP, FREE POOL CONTAINS:");
+            for (unsigned long cc = 0; cc < free_memory_pool->len; cc++){
+                printf("%lu->", free_memory_pool->page_array[cc]);
+            }
+            printf("END");
         }
-        printf("END");
+
         page_array_insert(mem_hash_table[requesting_process->process_id], free_page);
         current_pages_required -= 1;
         if (DEBUG){
@@ -445,6 +458,7 @@ void first_come_first_served(process_queue* incoming_process_queue, sorted_mem_p
         n_processes_waiting = processes_waiting(current_time, incoming_process_queue);
 
         //print process complete info
+        evict(free_memory_pool, mem_hash_table[cur_process->process_id]);
         printf("%lu, FINISHED, id=%lu, proc-remaining=%lu\n", current_time, cur_process->process_id, n_processes_waiting);
 
         //get next enqueued process
@@ -497,6 +511,7 @@ void round_robin(process_queue* incoming_process_queue, sorted_mem_pages* free_m
             current_time += cur_process->job_time;
             cur_process->job_time = 0;
             enqueue_arrived_processes(current_time, working_queue, incoming_process_queue);
+            evict(free_memory_pool, mem_hash_table[cur_process->process_id]);
             printf("%lu, FINISHED, id=%lu, proc-remaining=%lu\n", current_time, cur_process->process_id, working_queue->len);
 
             //if no jobs can be swapped to, simulate waiting for the next job to arrive
