@@ -294,7 +294,7 @@ void process_evict(sorted_mem_pages* free_memory_pool, sorted_mem_pages* page_st
 //print info about evict
 void print_evict(sorted_mem_pages* temp_evicted_pages, unsigned long current_time){
     if (temp_evicted_pages->len == 0){
-        printf("EVICTS WERE EMPTY\n");
+        //printf("EVICTS WERE EMPTY\n");
         return;
     }
 
@@ -514,6 +514,9 @@ void first_come_first_served(process_queue* incoming_process_queue, sorted_mem_p
         load_cost = load_memory(cur_process, mem_hash_table, free_memory_pool, working_queue, cur_process->memory_size_req/4, current_time, memory_manager, temp_evicted_pages);
         //apply loading penalty
         cur_process->job_time += (cur_process->memory_size_req/4 - mem_hash_table[cur_process->process_id]->len);
+
+        //print evicts
+        print_evict(temp_evicted_pages, current_time);
     }
     process_running_print(current_time, mem_hash_table, free_memory_pool, memory_size, cur_process, load_cost, memory_manager);
     current_time += load_cost;
@@ -526,6 +529,9 @@ void first_come_first_served(process_queue* incoming_process_queue, sorted_mem_p
         //evict if necessary
         if (memory_manager != MEM_UNLIMITED){
             process_evict(free_memory_pool, mem_hash_table[cur_process->process_id], EVICT_ALL, current_time, temp_evicted_pages);
+
+            //print evicts
+            print_evict(temp_evicted_pages, current_time);
         }
         
         //prepare for next iteration and update
@@ -556,6 +562,9 @@ void first_come_first_served(process_queue* incoming_process_queue, sorted_mem_p
             load_cost = load_memory(cur_process, mem_hash_table, free_memory_pool, working_queue, cur_process->memory_size_req/4, current_time, memory_manager, temp_evicted_pages);
             //apply loading penalty
             cur_process->job_time += (cur_process->memory_size_req/4 - mem_hash_table[cur_process->process_id]->len);
+
+            //print evicts
+            page_array_pop_last(temp_evicted_pages);
         }
         process_running_print(current_time, mem_hash_table, free_memory_pool, memory_size, cur_process, load_cost, memory_manager);
         current_time += load_cost; //load cost is always 0 for mem_unlimited
@@ -586,6 +595,9 @@ void round_robin(process_queue* incoming_process_queue, sorted_mem_pages* free_m
         load_cost = load_memory(cur_process, mem_hash_table, free_memory_pool, working_queue, cur_process->memory_size_req/4, current_time, memory_manager, temp_evicted_pages);
         //apply loading penalty
         cur_process->job_time += (cur_process->memory_size_req/4 - mem_hash_table[cur_process->process_id]->len);
+
+        //print evicts
+        print_evict(temp_evicted_pages, current_time);
     }
     process_running_print(current_time, mem_hash_table, free_memory_pool, memory_size, cur_process, load_cost, memory_manager);
     current_time += load_cost;
