@@ -433,13 +433,28 @@ void enqueue_arrived_processes(unsigned long current_time, process_queue* workin
 
 void first_come_first_served(process_queue* incoming_process_queue, sorted_mem_pages* free_memory_pool, sorted_mem_pages** mem_hash_table, char memory_manager){
     unsigned long current_time = 0;
-
     process_queue* working_queue = construct_queue();
-    process* cur_process = NULL;
     enqueue_arrived_processes(current_time, working_queue, incoming_process_queue);
+    process* cur_process = queue_dequeue(working_queue);
+
     while (working_queue->len > 0 || incoming_process_queue->len > 0){
 
+        //load required pages
+        if (memory_manager != MEM_UNLIMITED){
+            current_time += load_memory(cur_process, mem_hash_table, free_memory_pool, working_queue, memory_manager);
+        }
+
+        //simulate time spent running job
+        current_time += cur_process->job_time;
+        cur_process->job_time = 0;
+
+        //print process complete info
+        evict(free_memory_pool, mem_hash_table[cur_process->process_id]);
+
+        //prepare for next iteration and update
         enqueue_arrived_processes(current_time, working_queue, incoming_process_queue);
+        printf("%lu, FINISHED, id=%lu, proc-remaining=%lu\n", current_time, cur_process->process_id, working_queue->len);
+
         //wait for new processes if required
         if (working_queue->len == 0){
             if (DEBUG){
@@ -457,24 +472,10 @@ void first_come_first_served(process_queue* incoming_process_queue, sorted_mem_p
             enqueue_arrived_processes(current_time, working_queue, incoming_process_queue);
         }
 
-        //select process
+        //set next process
+        //apparently running starts at point pages begin to be loaded, rather than afterwards :/
         cur_process = queue_dequeue(working_queue);
-        
-        //load required pages
-        if (memory_manager != MEM_UNLIMITED){
-            current_time += load_memory(cur_process, mem_hash_table, free_memory_pool, working_queue, memory_manager);
-        }
-
-        //print generic process start info
         printf("%lu, RUNNING, id=%lu, remaining-time=%lu\n", current_time, cur_process->process_id, cur_process->job_time);
-        
-        //simulate time spent running job
-        current_time += cur_process->job_time;
-        cur_process->job_time = 0;
-
-        //print process complete info
-        evict(free_memory_pool, mem_hash_table[cur_process->process_id]);
-        printf("%lu, FINISHED, id=%lu, proc-remaining=%lu\n", current_time, cur_process->process_id, working_queue->len);
     }
 }
 
@@ -535,11 +536,13 @@ void round_robin(process_queue* incoming_process_queue, sorted_mem_pages* free_m
             }
             //load next process
             cur_process = queue_dequeue(working_queue);
+
+            //apparently running starts before memory is loaded ZZZZZZZ
+            printf("%lu, RUNNING, id=%lu, remaining-time=%lu\n", current_time, cur_process->process_id, cur_process->job_time);
             if (memory_manager != MEM_UNLIMITED){
                 //need to do integration work on this
                 current_time += load_memory(cur_process, mem_hash_table, free_memory_pool, working_queue, memory_manager);
             }
-            printf("%lu, RUNNING, id=%lu, remaining-time=%lu\n", current_time, cur_process->process_id, cur_process->job_time);
             
 
         //if job won't be finished this quantum, shuffle it to the back and select a new job
@@ -554,11 +557,11 @@ void round_robin(process_queue* incoming_process_queue, sorted_mem_pages* free_m
                 //place process at back of queue and announce return from suspension
                 queue_enqueue(working_queue, cur_process);
                 cur_process = queue_dequeue(working_queue);
+                printf("%lu, RUNNING, id=%lu, remaining-time=%lu\n", current_time, cur_process->process_id, cur_process->job_time);
                 if (memory_manager != MEM_UNLIMITED){
                     //need to do integration work on this
                     current_time += load_memory(cur_process, mem_hash_table, free_memory_pool, working_queue, memory_manager);
                 }
-                printf("%lu, RUNNING, id=%lu, remaining-time=%lu\n", current_time, cur_process->process_id, cur_process->job_time);
             }
         }
         
