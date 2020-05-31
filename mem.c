@@ -586,18 +586,14 @@ void round_robin(process_queue* incoming_process_queue, sorted_mem_pages* free_m
             current_time += quantum;
             cur_process->job_time -= quantum;
             enqueue_arrived_processes(current_time, working_queue, incoming_process_queue);
-
-            //only change process and report change if a new process can be swapped to (in the case that working_queue is 0 after removal of cur_process and addition of new processes, no processes can be swapped to)
-            if (working_queue->len != 0){
-                //place process at back of queue and announce return from suspension
-                queue_enqueue(working_queue, cur_process);
-                cur_process = queue_dequeue(working_queue);
-                if (memory_manager != MEM_UNLIMITED){
-                    load_cost = load_memory(cur_process, mem_hash_table, free_memory_pool, working_queue, current_time, memory_manager);
-                }
-                process_running_print(current_time, mem_hash_table, free_memory_pool, memory_size, cur_process, load_cost, memory_manager);
-                current_time += load_cost;
+            //place process at back of queue and announce return from suspension
+            queue_enqueue(working_queue, cur_process);
+            cur_process = queue_dequeue(working_queue);
+            if (memory_manager != MEM_UNLIMITED){
+                load_cost = load_memory(cur_process, mem_hash_table, free_memory_pool, working_queue, current_time, memory_manager);
             }
+            process_running_print(current_time, mem_hash_table, free_memory_pool, memory_size, cur_process, load_cost, memory_manager);
+            current_time += load_cost;
         }
         
     }
