@@ -12,6 +12,9 @@
 #define LOADING_COST 2
 #define EVICT_ALL 0
 
+//stats config
+#define MAX_WINDOWS 1000
+#define WINDOW_SIZE 60
 
 //treat max unsigned long as missing value
 #define EMPTY_VALUE 4294967295 //i'm aware that this value of ULONG_MAX isn't guaranteed, fk it tho
@@ -50,21 +53,81 @@ unsigned long min(unsigned long a, unsigned long b){
     return b;
 }
 
+
 //***********************************************************************************************
 //process information data structure
 
-typedef struct process{
+typedef struct Process process;
+struct Process{
     unsigned long time_arrived;
     unsigned long process_id;
     unsigned long memory_size_req;
     unsigned long job_time;
-} process;
+};
 
 void print_process(process* target_process){
-    printf("%lu %lu %lu %lu\n", target_process->time_arrived, target_process->process_id, 
-    target_process->memory_size_req, target_process->job_time);
+    printf("%lu %lu %lu %lu\n", target_process->time_arrived, target_process->process_id, target_process->memory_size_req, target_process->job_time);
 }
 
+//***********************************************************************************************
+//stats structure and helper functions
+
+typedef struct Stats stats;
+struct Stats{
+    unsigned long* endtimes;
+    unsigned long turnaround_aggregate;
+    double overhead_aggregate;
+    double max_overhead;
+    unsigned long n_processes;
+};
+
+stats* construct_stats(){
+    stats* new_stats = malloc(sizeof(stats));
+    new_stats->endtimes = calloc(MAX_WINDOWS, sizeof(unsigned long));
+    new_stats->overhead_aggregate = 0;
+    new_stats->max_overhead = 0;
+    new_stats->turnaround_aggregate = 0;
+    new_stats->n_processes = 0;
+    return new_stats;
+}
+
+void update_stats(stats* overall_stats, process* completed_process, unsigned long current_time){
+    unsigned long turnaround = current_time - completed_process->time_arrived;
+    overall_stats->turnaround_aggregate += turnaround;
+    double overhead = turnaround/completed_process->job_time;
+    overall_stats->overhead_aggregate += overhead;
+    if (overhead > overall_stats->max_overhead){
+        overall_stats->max_overhead = overhead;
+    }
+    overall_stats->endtimes[(current_time + WINDOW_SIZE-1)/WINDOW_SIZE] += 1;
+    overall_stats->n_processes += 1;
+}
+
+void output_final_stats(stats* overall_stats, unsigned long current_time){
+    //get throughput data
+    unsigned long throughput_min = EMPTY_VALUE; //max unsigned long
+    unsigned long throughput_max = 0;
+    unsigned long throughput_avg = 0;
+    for (unsigned long i = 0; i < MAX_WINDOWS; i++){
+        //as soon as interval that doesn't have anything in it appears, go next
+        //not sure if this assumption is correct but who cares
+        if (overall_stats->endtimes[i] == 0){
+            throughput_avg = throughput_avg / i;
+            break;
+        }
+        throughput_avg += overall_stats->endtimes[i]; //is actually an aggregate until the loop breaks
+        if (overall_stats->endtimes[i] < throughput_min){
+            throughput_min = overall_stats->endtimes[i];
+        }
+        if (overall_stats->endtimes[i] > throughput_max){
+            throughput_max = overall_stats->endtimes[i];
+        }
+    }
+    printf("Throughput %lu, %lu, %lu\n", throughput_min, throughput_max, throughput_avg);
+    printf("Turnaround time %lu\n", overall_stats->turnaround_aggregate / overall_stats->n_processes);
+    printf("Time overhead %.2lf %.2lf\n", overall_stats->max_overhead, overall_stats->overhead_aggregate/overall_stats->n_processes);
+    printf("Makespan %lu\n", current_time);
+}
 
 //***********************************************************************************************
 //queue data structure and helper functions
@@ -480,7 +543,7 @@ void enqueue_arrived_processes(unsigned long current_time, process_queue* workin
 
 //***********************************************************************************************
 //helper functions to output and perform simple prep work
-void process_running_print(unsigned long current_time, sorted_mem_pages** mem_hash_table, sorted_mem_pages* free_memory_pool, unsigned long memory_size, process* cur_process, unsigned long load_cost, char memory_manager){
+void process_running_print(unsigned long current_time, sorted_mem_pages** mem_hash_table, sorted_mem_pages* free_memory_pool, unsigned long memory_size, process* cur_process, unsigned long load_cost, char memory_manager, stats* overall_stats){
     if (memory_manager == MEM_UNLIMITED){
         printf("%lu, RUNNING, id=%lu, remaining-time=%lu\n", current_time, cur_process->process_id, cur_process->job_time);
     }else{
@@ -495,13 +558,14 @@ void process_running_print(unsigned long current_time, sorted_mem_pages** mem_ha
             }
         }
     }
+    update_stats(overall_stats, cur_process, current_time);
 }
 
 
 //***********************************************************************************************
 //first come first served scheduler
 
-void first_come_first_served(process_queue* incoming_process_queue, sorted_mem_pages* free_memory_pool, sorted_mem_pages** mem_hash_table, unsigned long memory_size, char memory_manager){
+void first_come_first_served(process_queue* incoming_process_queue, sorted_mem_pages* free_memory_pool, sorted_mem_pages** mem_hash_table, unsigned long memory_size, char memory_manager, stats* overall_stats){
     unsigned long current_time = 0;
     unsigned long load_cost = 0;
 
@@ -520,7 +584,7 @@ void first_come_first_served(process_queue* incoming_process_queue, sorted_mem_p
         //print evicts
         print_evict(temp_evicted_pages, current_time);
     }
-    process_running_print(current_time, mem_hash_table, free_memory_pool, memory_size, cur_process, load_cost, memory_manager);
+    process_running_print(current_time, mem_hash_table, free_memory_pool, memory_size, cur_process, load_cost, memory_manager, overall_stats);
     current_time += load_cost;
 
     while (1){
@@ -550,6 +614,7 @@ void first_come_first_served(process_queue* incoming_process_queue, sorted_mem_p
                 if (DEBUG){
                     printf("all processes complete...\n");
                 }
+                output_final_stats(overall_stats, current_time);
                 return;
             }
             //wait for next process
@@ -568,7 +633,7 @@ void first_come_first_served(process_queue* incoming_process_queue, sorted_mem_p
             //print evicts
             print_evict(temp_evicted_pages, current_time);
         }
-        process_running_print(current_time, mem_hash_table, free_memory_pool, memory_size, cur_process, load_cost, memory_manager);
+        process_running_print(current_time, mem_hash_table, free_memory_pool, memory_size, cur_process, load_cost, memory_manager, overall_stats);
         current_time += load_cost; //load cost is always 0 for mem_unlimited
     }
 }
@@ -579,7 +644,7 @@ void first_come_first_served(process_queue* incoming_process_queue, sorted_mem_p
 
 
 
-void round_robin(process_queue* incoming_process_queue, sorted_mem_pages* free_memory_pool, sorted_mem_pages** mem_hash_table, unsigned long quantum, unsigned long memory_size, char memory_manager){
+void round_robin(process_queue* incoming_process_queue, sorted_mem_pages* free_memory_pool, sorted_mem_pages** mem_hash_table, unsigned long quantum, unsigned long memory_size, char memory_manager, stats* overall_stats){
     unsigned long current_time = 0;
     unsigned long load_cost = 0;
     process* cur_process;
@@ -601,11 +666,11 @@ void round_robin(process_queue* incoming_process_queue, sorted_mem_pages* free_m
         //print evicts
         print_evict(temp_evicted_pages, current_time);
     }
-    process_running_print(current_time, mem_hash_table, free_memory_pool, memory_size, cur_process, load_cost, memory_manager);
+    process_running_print(current_time, mem_hash_table, free_memory_pool, memory_size, cur_process, load_cost, memory_manager, overall_stats);
     current_time += load_cost;
 
     //run until no processes remain
-    while (1==1){
+    while (1){
         //if job will be finished in this quantum
         if (cur_process->job_time <= quantum){
             //update time values and enqueue new processes
@@ -638,7 +703,8 @@ void round_robin(process_queue* incoming_process_queue, sorted_mem_pages* free_m
                     //if no jobs exist to work on and no jobs will arrive in the future, return
                     if (DEBUG){
                         printf("all processes complete\n");
-                    }                    
+                    }
+                    output_final_stats(overall_stats, current_time);                    
                     return;
                 }
             }
@@ -656,7 +722,7 @@ void round_robin(process_queue* incoming_process_queue, sorted_mem_pages* free_m
                 //print evictions
                 print_evict(temp_evicted_pages, current_time);
             }
-            process_running_print(current_time, mem_hash_table, free_memory_pool, memory_size, cur_process, load_cost, memory_manager);
+            process_running_print(current_time, mem_hash_table, free_memory_pool, memory_size, cur_process, load_cost, memory_manager, overall_stats);
             current_time += load_cost;
             
 
@@ -677,7 +743,7 @@ void round_robin(process_queue* incoming_process_queue, sorted_mem_pages* free_m
                 //print evictions
                 print_evict(temp_evicted_pages, current_time);
             }
-            process_running_print(current_time, mem_hash_table, free_memory_pool, memory_size, cur_process, load_cost, memory_manager);
+            process_running_print(current_time, mem_hash_table, free_memory_pool, memory_size, cur_process, load_cost, memory_manager, overall_stats);
             current_time += load_cost;
         }
         
@@ -812,20 +878,20 @@ int main(int argc, char** argv){
     }
     sorted_mem_pages* free_memory_pool = populate_free_memory_pool(memory_size);
     sorted_mem_pages** mem_usage_table = create_hash_table();
+    stats* overall_stats = construct_stats();
 
     
     //run round robin scheduler with unlimited memory
     if (scheduling_algorithm == SCHEDULER_RR){
-        round_robin(incoming_process_queue, free_memory_pool, mem_usage_table, quantum, memory_size, memory_manager);
+        round_robin(incoming_process_queue, free_memory_pool, mem_usage_table, quantum, memory_size, memory_manager, overall_stats);
     }
     if (scheduling_algorithm == SCHEDULER_FCFS){
-        first_come_first_served(incoming_process_queue, free_memory_pool, mem_usage_table, memory_size, memory_manager);
+        first_come_first_served(incoming_process_queue, free_memory_pool, mem_usage_table, memory_size, memory_manager, overall_stats);
     }
     if (scheduling_algorithm == SCHEDULER_CUSTOM){
         if (DEBUG){
             printf("custom scheduler is not yet implemented yet\n");
         }
     }
-    
     return 0;
 }
