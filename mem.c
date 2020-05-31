@@ -422,11 +422,13 @@ unsigned long load_memory(process* requesting_process, sorted_mem_pages** mem_ha
     }
 
     //swap memory as required
+    unsigned long early_swap = 0;
     if (memory_manager == MEM_VIRTUAL){
+        early_swap = initial_pages_required - current_pages_required;
         current_pages_required = 4 - min(4, initial_pages_required - current_pages_required);
         printf("process requires %lu pages\n", current_pages_required);
     }
-    cost =  mem_swap(mem_hash_table, free_memory_pool, working_queue, requesting_process->process_id, current_pages_required, current_time, memory_manager) * LOADING_COST;
+    cost =  (early_swap + mem_swap(mem_hash_table, free_memory_pool, working_queue, requesting_process->process_id, current_pages_required, current_time, memory_manager)) * LOADING_COST;
     return cost;
 }
 
