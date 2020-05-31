@@ -404,72 +404,9 @@ unsigned long load_memory(process* requesting_process, sorted_mem_pages** mem_ha
     return cost;
 }
 
-//***********************************************************************************************
-//first come first served scheduler
-
-//can prob do faster with some kind of lookup or special ordering in data struct, but O(n) is pretty fast anyway so who cares
-unsigned long processes_waiting(unsigned long current_time, process_queue* incoming_process_queue){
-    if (incoming_process_queue->len == 0){
-        return 0;
-    }
-    unsigned long n_processes_waiting = 0;
-    queue_node* cur = incoming_process_queue->front;
-    while (cur != NULL){
-        if (cur->value->time_arrived <= current_time){
-            n_processes_waiting += 1;
-            cur = cur->prev;
-        }else{
-            return n_processes_waiting;
-        }
-    }
-    return n_processes_waiting;
-}
-
-
-void first_come_first_served(process_queue* incoming_process_queue, sorted_mem_pages* free_memory_pool, sorted_mem_pages** mem_hash_table, char memory_manager){
-    unsigned long current_time = 0;
-    unsigned long n_processes_waiting;
-    process* cur_process = queue_dequeue(incoming_process_queue);
-    while (cur_process != NULL){
-        //simulate waiting for new process
-        if (cur_process->time_arrived > current_time){
-            if (DEBUG){
-                printf("waiting for new process...\n");
-            }
-            
-            current_time += cur_process->time_arrived - current_time;
-        }
-
-        //print generic process start info
-        printf("%lu, RUNNING, id=%lu, remaining-time=%lu\n", current_time, cur_process->process_id, cur_process->job_time);
-        
-        //load required pages
-        if (memory_manager != MEM_UNLIMITED){
-            //NEED TO REWRITE SO WORKING QUEUE IS MEANINGFUL HERE
-            //need to do other integration stuff also
-            //current_time += load_memory(cur_process, mem_hash_table, free_memory_pool, working_queue, memory_manager);
-        }
-        
-        //simulate time spent loading pages and running job
-        current_time += cur_process->job_time;
-        cur_process->job_time = 0;
-
-        //count how many processes are waiting
-        n_processes_waiting = processes_waiting(current_time, incoming_process_queue);
-
-        //print process complete info
-        evict(free_memory_pool, mem_hash_table[cur_process->process_id]);
-        printf("%lu, FINISHED, id=%lu, proc-remaining=%lu\n", current_time, cur_process->process_id, n_processes_waiting);
-
-        //get next enqueued process
-        cur_process = queue_dequeue(incoming_process_queue);
-    }
-}
-
 
 //***********************************************************************************************
-//round robin scheduler
-
+//scheduler helper, adds arrived processes to working queue
 void enqueue_arrived_processes(unsigned long current_time, process_queue* working_queue, process_queue* incoming_process_queue){
     if (incoming_process_queue->len == 0){
         if (DEBUG){
@@ -490,6 +427,62 @@ void enqueue_arrived_processes(unsigned long current_time, process_queue* workin
         cur = incoming_process_queue->front;
     }
 }
+
+//***********************************************************************************************
+//first come first served scheduler
+
+void first_come_first_served(process_queue* incoming_process_queue, sorted_mem_pages* free_memory_pool, sorted_mem_pages** mem_hash_table, char memory_manager){
+    unsigned long current_time = 0;
+
+    process_queue* working_queue = construct_queue();
+    process* cur_process = NULL;
+    enqueue_arrived_processes(current_time, working_queue, incoming_process_queue);
+    while (working_queue->len > 0 || incoming_process_queue->len > 0){
+
+        enqueue_arrived_processes(current_time, working_queue, incoming_process_queue);
+        //wait for new processes if required
+        if (working_queue->len == 0){
+            if (DEBUG){
+                printf("waiting for new process...\n");
+            }
+            //all processes complete
+            if (incoming_process_queue->len == 0){
+                if (DEBUG){
+                    printf("all processes complete...\n");
+                }
+                return;
+            }
+            //wait for next process
+            current_time += incoming_process_queue->front->value->time_arrived - current_time;
+            enqueue_arrived_processes(current_time, working_queue, incoming_process_queue);
+        }
+
+        //select process
+        cur_process = queue_dequeue(working_queue);
+        
+        //load required pages
+        if (memory_manager != MEM_UNLIMITED){
+            current_time += load_memory(cur_process, mem_hash_table, free_memory_pool, working_queue, memory_manager);
+        }
+
+        //print generic process start info
+        printf("%lu, RUNNING, id=%lu, remaining-time=%lu\n", current_time, cur_process->process_id, cur_process->job_time);
+        
+        //simulate time spent running job
+        current_time += cur_process->job_time;
+        cur_process->job_time = 0;
+
+        //print process complete info
+        evict(free_memory_pool, mem_hash_table[cur_process->process_id]);
+        printf("%lu, FINISHED, id=%lu, proc-remaining=%lu\n", current_time, cur_process->process_id, working_queue->len);
+    }
+}
+
+
+//***********************************************************************************************
+//round robin scheduler
+
+
 
 void round_robin(process_queue* incoming_process_queue, sorted_mem_pages* free_memory_pool, sorted_mem_pages** mem_hash_table, unsigned long quantum, char memory_manager){
     unsigned long current_time = 0;
@@ -568,6 +561,11 @@ void round_robin(process_queue* incoming_process_queue, sorted_mem_pages* free_m
         
     }
 }
+
+
+//***********************************************************************************************
+//
+
 
 
 //***********************************************************************************************
