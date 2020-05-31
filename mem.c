@@ -284,7 +284,7 @@ void process_evict(sorted_mem_pages* free_memory_pool, sorted_mem_pages* page_st
         freed_page = page_array_pop_last(page_storage);
         page_array_insert(free_memory_pool, freed_page);
         page_array_insert(temp_evicted_pages, freed_page);
-        if (page_storage->len == 0){
+        if (page_storage->len == n_pages_to_keep){
             return;
         }
     }
