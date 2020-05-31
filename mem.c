@@ -335,8 +335,8 @@ unsigned long mem_swap(sorted_mem_pages** mem_hash_table, sorted_mem_pages* free
         return 0;
     }
 
-    printf("free memory len before swap: %lu\n", free_memory_pool->len);
-    printf("pages required: %lu\n", pages_required);
+    //printf("free memory len before swap: %lu\n", free_memory_pool->len);
+    //printf("pages required: %lu\n", pages_required);
 
     //how many pages to keep in process we are evicting from
     unsigned long n_pages_to_keep;
@@ -416,7 +416,9 @@ unsigned long load_memory(process* requesting_process, sorted_mem_pages** mem_ha
     
 
     //if requirements could be fulfilled from free memory, return early
-    if (current_pages_required == 0){
+    //printf("||process has len %lu\n", mem_hash_table[requesting_process->process_id]->len);
+    if ((memory_manager == MEM_VIRTUAL && mem_hash_table[requesting_process->process_id]->len >= 4) || current_pages_required == 0){
+        //printf("as process now has len %lu, returning", mem_hash_table[requesting_process->process_id]->len);
         cost = initial_pages_required * LOADING_COST;
         return cost;
     }
@@ -425,10 +427,10 @@ unsigned long load_memory(process* requesting_process, sorted_mem_pages** mem_ha
     unsigned long early_swap = 0;
     if (memory_manager == MEM_VIRTUAL){
         early_swap = initial_pages_required - current_pages_required;
-        current_pages_required = 4 - min(4, initial_pages_required - current_pages_required);
-        printf("process requires %lu pages\n", current_pages_required);
+        //current_pages_required = initial_pages_required - (initial_pages_required - current_pages_required);
+        //printf("process requires %lu pages\n", 4 - mem_hash_table[requesting_process->process_id]->len);
     }
-    cost =  (early_swap + mem_swap(mem_hash_table, free_memory_pool, working_queue, requesting_process->process_id, current_pages_required, current_time, memory_manager)) * LOADING_COST;
+    cost =  (early_swap + mem_swap(mem_hash_table, free_memory_pool, working_queue, requesting_process->process_id, (4 - mem_hash_table[requesting_process->process_id]->len), current_time, memory_manager)) * LOADING_COST;
     return cost;
 }
 
