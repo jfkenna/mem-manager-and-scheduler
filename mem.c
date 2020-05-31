@@ -551,7 +551,7 @@ void round_robin(process_queue* incoming_process_queue, sorted_mem_pages* free_m
             current_time += cur_process->job_time;
             cur_process->job_time = 0;
             enqueue_arrived_processes(current_time, working_queue, incoming_process_queue);
-            if (memory_manager == MEM_UNLIMITED){
+            if (memory_manager != MEM_UNLIMITED){
                 process_complete_evict(free_memory_pool, mem_hash_table[cur_process->process_id], current_time);
             }
             printf("%lu, FINISHED, id=%lu, proc-remaining=%lu\n", current_time, cur_process->process_id, working_queue->len);
