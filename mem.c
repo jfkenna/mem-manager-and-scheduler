@@ -263,10 +263,11 @@ unsigned long page_array_pop_last(sorted_mem_pages* page_storage){
 void process_complete_evict(sorted_mem_pages* free_memory_pool, sorted_mem_pages* page_storage, unsigned long current_time){
     unsigned long freed_page;
     printf("%lu, EVICTED, mem-addresses=[", current_time);
-    while (page_storage->len > 0){
+    //weird check is due to over issues with unsigned long
+    for (unsigned long i = page_storage->len- 1; i + 1 != 0; i--){ 
         freed_page = page_array_pop_last(page_storage);
         page_array_insert(free_memory_pool, freed_page);
-        if (page_storage->len == 0){
+        if (i == 0){
             printf("%lu]\n", freed_page);
         }else{
             printf("%lu,", freed_page);
@@ -445,8 +446,8 @@ void process_running_print(unsigned long current_time, sorted_mem_pages** mem_ha
         //100% - %free = %used
         unsigned long mem_use_percent = 100 - ((100 * free_memory_pool->len) + memory_size/4 - 1)/ (memory_size/4); //+ memory_size/4 - 1) to ensure percent is rounded up
         printf("%lu, RUNNING, id=%lu, remaining-time=%lu, load-time=%lu, mem-usage=%lu%%, mem-addresses=[", current_time, cur_process->process_id, cur_process->job_time, load_cost, mem_use_percent);
-        for (unsigned long i = 0; i < mem_hash_table[cur_process->process_id]->len; i++){
-            if (i == mem_hash_table[cur_process->process_id]->len - 1){
+        for (unsigned long i = mem_hash_table[cur_process->process_id]->len - 1; i != -1; i--){
+            if (i == 0){
                 printf("%lu]\n", mem_hash_table[cur_process->process_id]->page_array[i]);
             }else{
                 printf("%lu,", mem_hash_table[cur_process->process_id]->page_array[i]);
