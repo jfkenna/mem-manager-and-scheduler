@@ -155,12 +155,12 @@ sorted_mem_pages* construct_mem_pages(){
 //maintain reverse sorted order on insertion
 void page_array_insert(sorted_mem_pages* page_storage, unsigned long page_number){
     if (DEBUG){
-        printf("\nwant to insert %lu, array has len %lu and alloc len %lu", page_number, page_storage->len, page_storage->alloced_len);
+        //printf("\nwant to insert %lu, array has len %lu and alloc len %lu", page_number, page_storage->len, page_storage->alloced_len);
     }
     //insert first element
     if (page_storage->len == 0){
         if (DEBUG){
-            printf("\ninserting as first element");
+            //printf("\ninserting as first element");
         }
         
         //set initial size
@@ -189,7 +189,7 @@ void page_array_insert(sorted_mem_pages* page_storage, unsigned long page_number
         //=============================end modified code===================================
 
         if (DEBUG){
-            printf("\ninsert index %lu", insert_index);
+            //printf("\ninsert index %lu", insert_index);
         }
         //if not enough memory has been allocated, reallocate and insert
         if (page_storage->alloced_len < 1 + page_storage->len){
@@ -262,6 +262,9 @@ unsigned long page_array_pop_last(sorted_mem_pages* page_storage){
 //complete eviction
 void process_complete_evict(sorted_mem_pages* free_memory_pool, sorted_mem_pages* page_storage, unsigned long current_time){
     unsigned long freed_page;
+    if (page_storage->len == 0){
+        printf("\n\n===========TRYING TO EVIC PROCESS WITH 0 PAGES ALLOCATED\n\n");
+    }
     if (page_storage->len == 1){
         printf("%lu, EVICTED, mem-addresses=[%lu]\n", current_time, page_array_pop_last(page_storage));
         return;
@@ -270,7 +273,7 @@ void process_complete_evict(sorted_mem_pages* free_memory_pool, sorted_mem_pages
     while (1){ 
         freed_page = page_array_pop_last(page_storage);
         page_array_insert(free_memory_pool, freed_page);
-        if (page_storage->len == 1){
+        if (page_storage->len == 0){
             printf("%lu]\n", freed_page);
             break;
         }else{
@@ -296,7 +299,7 @@ sorted_mem_pages* populate_free_memory_pool(unsigned long available_memory){
     unsigned long* page_array = malloc((available_memory/4) * sizeof(unsigned long));
 
     //ensure initial fill is sorted in reverse order
-    for (unsigned long i = (available_memory/4) - 1; i != -1; i--){ //i >= 0 is bugged, using i != -1 instead
+    for (unsigned long i = 0; i < (available_memory/4); i++){ 
         page_array[(available_memory/4) - 1 - i] = i;
     }
     //ready to output
@@ -324,8 +327,19 @@ unsigned long mem_swap(sorted_mem_pages** mem_hash_table, sorted_mem_pages* free
     //until enough memory is freed, free all memory allocated single processes
     queue_node* removal_target_process = working_queue->front;
     while (free_memory_pool->len < pages_required && removal_target_process != NULL){
-        process_complete_evict(free_memory_pool, mem_hash_table[removal_target_process->value->process_id], current_time);
+        if (memory_manager != MEM_UNLIMITED){
+            printf("process mem length of: %lu", mem_hash_table[removal_target_process->value->process_id]->len );
+            if (mem_hash_table[removal_target_process->value->process_id]->len > 0){
+                printf("evicting... free_memory_pool->len is %lu", free_memory_pool->len);
+                process_complete_evict(free_memory_pool, mem_hash_table[removal_target_process->value->process_id], current_time);
+                printf("after evicting... free_memory_pool->len is %lu", free_memory_pool->len);
+            }
+        }
         removal_target_process = removal_target_process->prev;
+    }
+
+    if (free_memory_pool->len < pages_required){
+        printf("not enough memory");
     }
 
     //load memory into processs
@@ -335,10 +349,6 @@ unsigned long mem_swap(sorted_mem_pages** mem_hash_table, sorted_mem_pages* free
         swap_page = page_array_pop_last(free_memory_pool);
         page_array_insert(mem_hash_table[requesting_process_id], swap_page);
         pages_swapped += 1;
-    }
-
-    if (pages_swapped != pages_required){
-        printf("not enough memory, even after freeing other processes. i don't have handling for this!\n");
     }
     return pages_swapped;
 }
