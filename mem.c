@@ -310,54 +310,33 @@ sorted_mem_pages* populate_free_memory_pool(unsigned long available_memory){
 //***********************************************************************************************
 //swapping
 
-unsigned long mem_swap(sorted_mem_pages** mem_hash_table, sorted_mem_pages* free_memory_pool, process_queue* working_queue, unsigned long requesting_process_id, unsigned long pages_required, char memory_manager){
+unsigned long mem_swap(sorted_mem_pages** mem_hash_table, sorted_mem_pages* free_memory_pool, process_queue* working_queue, unsigned long requesting_process_id, unsigned long pages_required, unsigned long current_time, char memory_manager){
     //remove least recently executed ? i feel it should be most recently executed but i fill follow the spec!!!
     if (DEBUG){
         printf("\n==================SWAPPING MEM====================\n");
-        printf("want to swap %lu pages to pid %lu", pages_required, requesting_process_id);
     }
 
     if (working_queue == NULL){
         printf("\nnot enough memory and no processes in working queue to free!!! i don't have handling for this!\n");
         return 0;
     }
-    queue_node* removal_target_process = working_queue->front;
-    
-    unsigned long page_to_swap;
-    unsigned long pages_swapped = 0;
-
-    if (DEBUG){
-        printf("\nrequesting pid %lu is missing %lu pages", requesting_process_id, pages_required);
-    }
     
     //until enough memory is freed, free all memory allocated single processes
+    queue_node* removal_target_process = working_queue->front;
     while (free_memory_pool->len < pages_required && removal_target_process != NULL){
-        //remove all pages allocated to this process and attach them to new process (or to free pool if process has met memory requirements)
-        while (mem_hash_table[removal_target_process->value->process_id]->len > 0){
-            page_to_swap = page_array_pop_last(mem_hash_table[removal_target_process->value->process_id]);
-            if (pages_swapped < pages_required){
-                page_array_insert(mem_hash_table[requesting_process_id], page_to_swap);
-                pages_swapped += 1;
-                if (DEBUG){
-                    printf("swapped page #%lu from pid %lu to pid %lu\n", page_to_swap, removal_target_process->value->process_id, requesting_process_id);
-                }
-            }else{
-                //place memory back into free pool
-                if (DEBUG){
-                    printf("INSERT INTO FREE MEMORY POOL");
-                }
-                
-                page_array_insert(free_memory_pool, page_to_swap);
-                if (DEBUG){
-                    printf("swapped page #%lu from pid %lu back to free memory pool\n", page_to_swap, removal_target_process->value->process_id);
-                }
-            }
-        }
+        process_complete_evict(free_memory_pool, mem_hash_table[removal_target_process->value->process_id], current_time);
         removal_target_process = removal_target_process->prev;
-        if (DEBUG){
-            printf("swap in progress... %lu/%lu", pages_swapped, pages_required);
-        }
     }
+
+    //load memory into processs
+    unsigned long pages_swapped = 0;
+    unsigned long swap_page;
+    while (pages_swapped < pages_required){
+        swap_page = page_array_pop_last(free_memory_pool);
+        page_array_insert(mem_hash_table[requesting_process_id], swap_page);
+        pages_swapped += 1;
+    }
+
     if (pages_swapped != pages_required){
         printf("not enough memory, even after freeing other processes. i don't have handling for this!\n");
     }
@@ -367,7 +346,7 @@ unsigned long mem_swap(sorted_mem_pages** mem_hash_table, sorted_mem_pages* free
 
 //***********************************************************************************************
 //selects between different memory loading types, returns cost
-unsigned long load_memory(process* requesting_process, sorted_mem_pages** mem_hash_table, sorted_mem_pages* free_memory_pool, process_queue* working_queue, char memory_manager){
+unsigned long load_memory(process* requesting_process, sorted_mem_pages** mem_hash_table, sorted_mem_pages* free_memory_pool, process_queue* working_queue, unsigned long current_time, char memory_manager){
     unsigned long free_page;
     unsigned long cost;
     unsigned long initial_pages_required = (requesting_process->memory_size_req / 4) - mem_hash_table[requesting_process->process_id]->len;
@@ -406,9 +385,7 @@ unsigned long load_memory(process* requesting_process, sorted_mem_pages** mem_ha
 
     //select between memory management methods
     if (memory_manager == MEM_SWAPPING){
-        mem_swap(mem_hash_table, free_memory_pool, working_queue, requesting_process->process_id, current_pages_required, memory_manager);
-        //only the pages required by the process add to the cost, even if we swap more
-        cost = initial_pages_required * LOADING_COST;
+        cost =  mem_swap(mem_hash_table, free_memory_pool, working_queue, requesting_process->process_id, current_pages_required, current_time, memory_manager) * LOADING_COST;
     }
     if (memory_manager == MEM_VIRTUAL){
         printf("not implemented yet...\n");
@@ -473,7 +450,7 @@ void first_come_first_served(process_queue* incoming_process_queue, sorted_mem_p
 
     process* cur_process = queue_dequeue(working_queue);
     if (memory_manager != MEM_UNLIMITED){
-        load_cost = load_memory(cur_process, mem_hash_table, free_memory_pool, working_queue, memory_manager);
+        load_cost = load_memory(cur_process, mem_hash_table, free_memory_pool, working_queue, current_time, memory_manager);
     }
     process_running_print(current_time, mem_hash_table, free_memory_pool, memory_size, cur_process, load_cost, memory_manager);
     current_time += load_cost;
@@ -513,7 +490,7 @@ void first_come_first_served(process_queue* incoming_process_queue, sorted_mem_p
         cur_process = queue_dequeue(working_queue);
         //load required pages
         if (memory_manager != MEM_UNLIMITED){
-            load_cost = load_memory(cur_process, mem_hash_table, free_memory_pool, working_queue, memory_manager);
+            load_cost = load_memory(cur_process, mem_hash_table, free_memory_pool, working_queue, current_time, memory_manager);
         }
         process_running_print(current_time, mem_hash_table, free_memory_pool, memory_size, cur_process, load_cost, memory_manager);
         current_time += load_cost; //load cost is always 0 for mem_unlimited
@@ -538,7 +515,7 @@ void round_robin(process_queue* incoming_process_queue, sorted_mem_pages* free_m
     //set first process and load memory
     cur_process = queue_dequeue(working_queue);
     if (memory_manager != MEM_UNLIMITED){
-        load_cost = load_memory(cur_process, mem_hash_table, free_memory_pool, working_queue, memory_manager);
+        load_cost = load_memory(cur_process, mem_hash_table, free_memory_pool, working_queue, current_time, memory_manager);
     }
     process_running_print(current_time, mem_hash_table, free_memory_pool, memory_size, cur_process, load_cost, memory_manager);
     current_time += load_cost;
@@ -586,7 +563,7 @@ void round_robin(process_queue* incoming_process_queue, sorted_mem_pages* free_m
             //printf("%lu, RUNNING, id=%lu, remaining-time=%lu\n", current_time, cur_process->process_id, cur_process->job_time);
             if (memory_manager != MEM_UNLIMITED){
                 //need to do integration work on this
-                load_cost = load_memory(cur_process, mem_hash_table, free_memory_pool, working_queue, memory_manager);
+                load_cost = load_memory(cur_process, mem_hash_table, free_memory_pool, working_queue, current_time, memory_manager);
             }
             process_running_print(current_time, mem_hash_table, free_memory_pool, memory_size, cur_process, load_cost, memory_manager);
             current_time += load_cost;
@@ -605,7 +582,7 @@ void round_robin(process_queue* incoming_process_queue, sorted_mem_pages* free_m
                 queue_enqueue(working_queue, cur_process);
                 cur_process = queue_dequeue(working_queue);
                 if (memory_manager != MEM_UNLIMITED){
-                    load_cost = load_memory(cur_process, mem_hash_table, free_memory_pool, working_queue, memory_manager);
+                    load_cost = load_memory(cur_process, mem_hash_table, free_memory_pool, working_queue, current_time, memory_manager);
                 }
                 process_running_print(current_time, mem_hash_table, free_memory_pool, memory_size, cur_process, load_cost, memory_manager);
                 current_time += load_cost;
