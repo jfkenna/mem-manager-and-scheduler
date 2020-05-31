@@ -349,9 +349,9 @@ unsigned long mem_swap(sorted_mem_pages** mem_hash_table, sorted_mem_pages* free
     queue_node* removal_target_process = working_queue->front;
     while (free_memory_pool->len < pages_required && removal_target_process != NULL){
         if (memory_manager != MEM_UNLIMITED){
-            printf("\nchecking if pid %lu has alloced mem we can take...", removal_target_process->value->process_id);
+            //printf("\nchecking if pid %lu has alloced mem we can take...", removal_target_process->value->process_id);
             if (mem_hash_table[removal_target_process->value->process_id]->len > 0){
-                printf(" found memory");
+                //printf(" found memory");
                 if (memory_manager == MEM_SWAPPING){
                     n_pages_to_keep = EVICT_ALL;
                 }else{
@@ -417,7 +417,7 @@ unsigned long load_memory(process* requesting_process, sorted_mem_pages** mem_ha
     //swap memory as required
     if (memory_manager == MEM_VIRTUAL){
         current_pages_required = min(4, process_page_req - mem_hash_table[requesting_process->process_id]->len);
-        printf("\nprocess requires %lu pages", current_pages_required);
+        //printf("\nprocess requires %lu pages", current_pages_required);
     }
     cost =  mem_swap(mem_hash_table, free_memory_pool, working_queue, requesting_process->process_id, current_pages_required, current_time, memory_manager) * LOADING_COST;
     return cost;
