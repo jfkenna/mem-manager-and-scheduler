@@ -328,11 +328,8 @@ unsigned long mem_swap(sorted_mem_pages** mem_hash_table, sorted_mem_pages* free
     queue_node* removal_target_process = working_queue->front;
     while (free_memory_pool->len < pages_required && removal_target_process != NULL){
         if (memory_manager != MEM_UNLIMITED){
-            printf("process mem length of: %lu", mem_hash_table[removal_target_process->value->process_id]->len );
             if (mem_hash_table[removal_target_process->value->process_id]->len > 0){
-                printf("evicting... free_memory_pool->len is %lu", free_memory_pool->len);
                 process_complete_evict(free_memory_pool, mem_hash_table[removal_target_process->value->process_id], current_time);
-                printf("after evicting... free_memory_pool->len is %lu", free_memory_pool->len);
             }
         }
         removal_target_process = removal_target_process->prev;
