@@ -419,16 +419,17 @@ unsigned long load_memory(process* requesting_process, sorted_mem_pages** mem_ha
     //printf("||process has len %lu\n", mem_hash_table[requesting_process->process_id]->len);
     if ((memory_manager == MEM_VIRTUAL && mem_hash_table[requesting_process->process_id]->len >= 4) || current_pages_required == 0){
         //printf("as process now has len %lu, returning", mem_hash_table[requesting_process->process_id]->len);
-        cost = initial_pages_required * LOADING_COST;
+        cost = (initial_pages_required - current_pages_required) * LOADING_COST;
         return cost;
     }
 
     //swap memory as required
+    //idk if this early swap section even works, as it doesn't come up in the test cases as far as i can tell
     unsigned long early_swap = 0;
     if (memory_manager == MEM_VIRTUAL){
+        
         early_swap = initial_pages_required - current_pages_required;
-        //current_pages_required = initial_pages_required - (initial_pages_required - current_pages_required);
-        //printf("process requires %lu pages\n", 4 - mem_hash_table[requesting_process->process_id]->len);
+        //printf("early swap size of %lu\n", early_swap);
     }
     cost =  (early_swap + mem_swap(mem_hash_table, free_memory_pool, working_queue, requesting_process->process_id, (4 - mem_hash_table[requesting_process->process_id]->len), current_time, memory_manager)) * LOADING_COST;
     return cost;
