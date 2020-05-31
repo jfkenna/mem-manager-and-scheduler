@@ -260,9 +260,17 @@ unsigned long page_array_pop_last(sorted_mem_pages* page_storage){
 }
 
 //complete eviction
-void evict(sorted_mem_pages* free_memory_pool, sorted_mem_pages* page_storage){
+void process_complete_evict(sorted_mem_pages* free_memory_pool, sorted_mem_pages* page_storage, unsigned long current_time){
+    unsigned long freed_page;
+    printf("%lu, EVICTED, mem-addresses=[", current_time);
     while (page_storage->len > 0){
-        page_array_insert(free_memory_pool, page_array_pop_last(page_storage));
+        freed_page = page_array_pop_last(page_storage);
+        page_array_insert(free_memory_pool, freed_page);
+        if (page_storage->len == 0){
+            printf("%lu]\n", freed_page);
+        }else{
+            printf("%lu,", freed_page);
+        }
     }
 }
 
@@ -429,27 +437,49 @@ void enqueue_arrived_processes(unsigned long current_time, process_queue* workin
 }
 
 //***********************************************************************************************
+//helper functions to output and perform simple prep work
+void process_running_print(unsigned long current_time, sorted_mem_pages** mem_hash_table, sorted_mem_pages* free_memory_pool, unsigned long memory_size, process* cur_process, unsigned long load_cost, char memory_manager){
+    if (memory_manager == MEM_UNLIMITED){
+        printf("%lu, RUNNING, id=%lu, remaining-time=%lu\n", current_time, cur_process->process_id, cur_process->job_time);
+    }else{
+        //100% - %free = %used
+        unsigned long mem_use_percent = 100 - ((100 * free_memory_pool->len) + memory_size/4 - 1)/ (memory_size/4); //+ memory_size/4 - 1) to ensure percent is rounded up
+        printf("%lu, RUNNING, id=%lu, remaining-time=%lu, load-time=%lu, mem-usage=%lu%%, mem-addresses=[", current_time, cur_process->process_id, cur_process->job_time, load_cost, mem_use_percent);
+        for (unsigned long i = 0; i < mem_hash_table[cur_process->process_id]->len; i++){
+            if (i == mem_hash_table[cur_process->process_id]->len - 1){
+                printf("%lu]\n", mem_hash_table[cur_process->process_id]->page_array[i]);
+            }else{
+                printf("%lu,", mem_hash_table[cur_process->process_id]->page_array[i]);
+            }
+        }
+    }
+}
+
+
+//***********************************************************************************************
 //first come first served scheduler
 
-void first_come_first_served(process_queue* incoming_process_queue, sorted_mem_pages* free_memory_pool, sorted_mem_pages** mem_hash_table, char memory_manager){
+void first_come_first_served(process_queue* incoming_process_queue, sorted_mem_pages* free_memory_pool, sorted_mem_pages** mem_hash_table, unsigned long memory_size, char memory_manager){
     unsigned long current_time = 0;
+    unsigned long load_cost = 0;
+
     process_queue* working_queue = construct_queue();
     enqueue_arrived_processes(current_time, working_queue, incoming_process_queue);
+
     process* cur_process = queue_dequeue(working_queue);
+    if (memory_manager != MEM_UNLIMITED){
+        load_cost = load_memory(cur_process, mem_hash_table, free_memory_pool, working_queue, memory_manager);
+    }
+    process_running_print(current_time, mem_hash_table, free_memory_pool, memory_size, cur_process, load_cost, memory_manager);
+    current_time += load_cost;
 
-    while (working_queue->len > 0 || incoming_process_queue->len > 0){
-
-        //load required pages
-        if (memory_manager != MEM_UNLIMITED){
-            current_time += load_memory(cur_process, mem_hash_table, free_memory_pool, working_queue, memory_manager);
-        }
-
+    while (1){
         //simulate time spent running job
         current_time += cur_process->job_time;
         cur_process->job_time = 0;
 
         //print process complete info
-        evict(free_memory_pool, mem_hash_table[cur_process->process_id]);
+        process_complete_evict(free_memory_pool, mem_hash_table[cur_process->process_id], current_time);
 
         //prepare for next iteration and update
         enqueue_arrived_processes(current_time, working_queue, incoming_process_queue);
@@ -472,10 +502,14 @@ void first_come_first_served(process_queue* incoming_process_queue, sorted_mem_p
             enqueue_arrived_processes(current_time, working_queue, incoming_process_queue);
         }
 
-        //set next process
-        //apparently running starts at point pages begin to be loaded, rather than afterwards :/
+        //set next process. apparently running starts at point pages begin to be loaded, rather than afterwards BUT all the pages that will be loaded have to be output when it starts running ? very fucky:/
         cur_process = queue_dequeue(working_queue);
-        printf("%lu, RUNNING, id=%lu, remaining-time=%lu\n", current_time, cur_process->process_id, cur_process->job_time);
+        //load required pages
+        if (memory_manager != MEM_UNLIMITED){
+            load_cost = load_memory(cur_process, mem_hash_table, free_memory_pool, working_queue, memory_manager);
+        }
+        process_running_print(current_time, mem_hash_table, free_memory_pool, memory_size, cur_process, load_cost, memory_manager);
+        current_time += load_cost; //load cost is always 0 for mem_unlimited
     }
 }
 
@@ -485,8 +519,9 @@ void first_come_first_served(process_queue* incoming_process_queue, sorted_mem_p
 
 
 
-void round_robin(process_queue* incoming_process_queue, sorted_mem_pages* free_memory_pool, sorted_mem_pages** mem_hash_table, unsigned long quantum, char memory_manager){
+void round_robin(process_queue* incoming_process_queue, sorted_mem_pages* free_memory_pool, sorted_mem_pages** mem_hash_table, unsigned long quantum, unsigned long memory_size, char memory_manager){
     unsigned long current_time = 0;
+    unsigned long load_cost = 0;
     process* cur_process;
 
     //used to store processes that have actually arrived
@@ -496,9 +531,10 @@ void round_robin(process_queue* incoming_process_queue, sorted_mem_pages* free_m
     //set first process and load memory
     cur_process = queue_dequeue(working_queue);
     if (memory_manager != MEM_UNLIMITED){
-        current_time += load_memory(cur_process, mem_hash_table, free_memory_pool, working_queue, memory_manager);
+        load_cost = load_memory(cur_process, mem_hash_table, free_memory_pool, working_queue, memory_manager);
     }
-    printf("%lu, RUNNING, id=%lu, remaining-time=%lu\n", current_time, cur_process->process_id, cur_process->job_time);
+    process_running_print(current_time, mem_hash_table, free_memory_pool, memory_size, cur_process, load_cost, memory_manager);
+    current_time += load_cost;
 
     //run until no processes remain
     while (1==1){
@@ -508,7 +544,7 @@ void round_robin(process_queue* incoming_process_queue, sorted_mem_pages* free_m
             current_time += cur_process->job_time;
             cur_process->job_time = 0;
             enqueue_arrived_processes(current_time, working_queue, incoming_process_queue);
-            evict(free_memory_pool, mem_hash_table[cur_process->process_id]);
+            process_complete_evict(free_memory_pool, mem_hash_table[cur_process->process_id], current_time);
             printf("%lu, FINISHED, id=%lu, proc-remaining=%lu\n", current_time, cur_process->process_id, working_queue->len);
 
             //if no jobs can be swapped to, simulate waiting for the next job to arrive
@@ -538,11 +574,13 @@ void round_robin(process_queue* incoming_process_queue, sorted_mem_pages* free_m
             cur_process = queue_dequeue(working_queue);
 
             //apparently running starts before memory is loaded ZZZZZZZ
-            printf("%lu, RUNNING, id=%lu, remaining-time=%lu\n", current_time, cur_process->process_id, cur_process->job_time);
+            //printf("%lu, RUNNING, id=%lu, remaining-time=%lu\n", current_time, cur_process->process_id, cur_process->job_time);
             if (memory_manager != MEM_UNLIMITED){
                 //need to do integration work on this
-                current_time += load_memory(cur_process, mem_hash_table, free_memory_pool, working_queue, memory_manager);
+                load_cost = load_memory(cur_process, mem_hash_table, free_memory_pool, working_queue, memory_manager);
             }
+            process_running_print(current_time, mem_hash_table, free_memory_pool, memory_size, cur_process, load_cost, memory_manager);
+            current_time += load_cost;
             
 
         //if job won't be finished this quantum, shuffle it to the back and select a new job
@@ -557,11 +595,11 @@ void round_robin(process_queue* incoming_process_queue, sorted_mem_pages* free_m
                 //place process at back of queue and announce return from suspension
                 queue_enqueue(working_queue, cur_process);
                 cur_process = queue_dequeue(working_queue);
-                printf("%lu, RUNNING, id=%lu, remaining-time=%lu\n", current_time, cur_process->process_id, cur_process->job_time);
                 if (memory_manager != MEM_UNLIMITED){
-                    //need to do integration work on this
-                    current_time += load_memory(cur_process, mem_hash_table, free_memory_pool, working_queue, memory_manager);
+                    load_cost = load_memory(cur_process, mem_hash_table, free_memory_pool, working_queue, memory_manager);
                 }
+                process_running_print(current_time, mem_hash_table, free_memory_pool, memory_size, cur_process, load_cost, memory_manager);
+                current_time += load_cost;
             }
         }
         
@@ -700,10 +738,10 @@ int main(int argc, char** argv){
     
     //run round robin scheduler with unlimited memory
     if (scheduling_algorithm == SCHEDULER_RR){
-        round_robin(incoming_process_queue, free_memory_pool, mem_usage_table, quantum, memory_manager);
+        round_robin(incoming_process_queue, free_memory_pool, mem_usage_table, quantum, memory_size, memory_manager);
     }
     if (scheduling_algorithm == SCHEDULER_FCFS){
-        first_come_first_served(incoming_process_queue, free_memory_pool, mem_usage_table, memory_manager);
+        first_come_first_served(incoming_process_queue, free_memory_pool, mem_usage_table, memory_size, memory_manager);
     }
     if (scheduling_algorithm == SCHEDULER_CUSTOM){
         if (DEBUG){
