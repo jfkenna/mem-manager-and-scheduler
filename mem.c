@@ -352,6 +352,10 @@ unsigned long mem_swap(sorted_mem_pages** mem_hash_table, sorted_mem_pages* free
 
 
 //***********************************************************************************************
+//virtual memory
+
+
+//***********************************************************************************************
 //selects between different memory loading types, returns cost
 unsigned long load_memory(process* requesting_process, sorted_mem_pages** mem_hash_table, sorted_mem_pages* free_memory_pool, process_queue* working_queue, unsigned long current_time, char memory_manager){
     unsigned long free_page;
@@ -432,7 +436,7 @@ void process_running_print(unsigned long current_time, sorted_mem_pages** mem_ha
         printf("%lu, RUNNING, id=%lu, remaining-time=%lu\n", current_time, cur_process->process_id, cur_process->job_time);
     }else{
         //100% - %free = %used
-        unsigned long mem_use_percent = 100 - ((100 * free_memory_pool->len)/ (memory_size/4); //+ memory_size/4 - 1) to ensure percent is rounded up
+        unsigned long mem_use_percent = 100 - (100 * free_memory_pool->len)/ (memory_size/4); //+ memory_size/4 - 1) to ensure percent is rounded up
         printf("%lu, RUNNING, id=%lu, remaining-time=%lu, load-time=%lu, mem-usage=%lu%%, mem-addresses=[", current_time, cur_process->process_id, cur_process->job_time, load_cost, mem_use_percent);
         for (unsigned long i = mem_hash_table[cur_process->process_id]->len - 1; i != -1; i--){
             if (i == 0){
