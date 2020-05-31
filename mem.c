@@ -267,10 +267,9 @@ unsigned long page_array_pop_last(sorted_mem_pages* page_storage){
 }
 
 //complete eviction
-void process_evict(sorted_mem_pages* free_memory_pool, sorted_mem_pages* page_storage, unsigned long n_pages_to_keep, unsigned long current_time){
+void process_evict(sorted_mem_pages* free_memory_pool, sorted_mem_pages* page_storage, unsigned long n_pages_to_keep, unsigned long current_time, sorted_mem_pages* temp_evicted_pages){
     unsigned long freed_page;
 
-    //printf("\nEVICTING ALL BUT %lu PAGES", n_pages_to_keep);
     //check first to avoid removing an extra page
     if (page_storage->len <= n_pages_to_keep){
         return;
@@ -280,16 +279,34 @@ void process_evict(sorted_mem_pages* free_memory_pool, sorted_mem_pages* page_st
         printf("\n\n===========TRYING TO EVIC PROCESS WITH 0 PAGES ALLOCATED\n\n");
         return;
     }
-    printf("%lu, EVICTED, mem-addresses=[", current_time);
+    
     while (1){ 
         freed_page = page_array_pop_last(page_storage);
         page_array_insert(free_memory_pool, freed_page);
-        if (page_storage->len == n_pages_to_keep){
-            printf("%lu]\n", freed_page);
-            break;
-        }else{
-            printf("%lu,", freed_page);
+        page_array_insert(temp_evicted_pages, freed_page);
+        if (page_storage->len == 0){
+            return;
         }
+    }
+}
+
+
+//print info about evict
+void print_evict(sorted_mem_pages* temp_evicted_pages, unsigned long current_time){
+    if (temp_evicted_pages->len == 0){
+        printf("EVICTS WERE EMPTY\n");
+        return;
+    }
+
+    unsigned long freed_page;
+    printf("%lu, EVICTED, mem-addresses=[", current_time);
+    while (1){
+        freed_page = page_array_pop_last(temp_evicted_pages);
+        if (temp_evicted_pages->len == 0){
+            printf("%lu]\n", freed_page);
+            return;
+        }
+        printf("%lu,", freed_page);
     }
 }
 
@@ -325,7 +342,7 @@ sorted_mem_pages* populate_free_memory_pool(unsigned long available_memory){
 //***********************************************************************************************
 //swapping
 
-unsigned long mem_swap(sorted_mem_pages** mem_hash_table, sorted_mem_pages* free_memory_pool, process_queue* working_queue, unsigned long requesting_process_id, unsigned long pages_required, unsigned long current_time, char memory_manager){
+unsigned long mem_swap(sorted_mem_pages** mem_hash_table, sorted_mem_pages* free_memory_pool, process_queue* working_queue, unsigned long requesting_process_id, unsigned long pages_required, unsigned long current_time, char memory_manager, sorted_mem_pages* temp_evicted_pages){
     if (DEBUG){
         printf("\n==================SWAPPING MEM====================\n");
     }
@@ -356,7 +373,7 @@ unsigned long mem_swap(sorted_mem_pages** mem_hash_table, sorted_mem_pages* free
                     n_pages_to_keep = max(mem_hash_table[removal_target_process->value->process_id]->len, pages_required) - pages_required;
                     pages_required -= mem_hash_table[removal_target_process->value->process_id]->len - n_pages_to_keep;
                 }
-                process_evict(free_memory_pool, mem_hash_table[removal_target_process->value->process_id], n_pages_to_keep, current_time);
+                process_evict(free_memory_pool, mem_hash_table[removal_target_process->value->process_id], n_pages_to_keep, current_time, temp_evicted_pages);
             }
         }
         //printf("free mem pages after evict: %lu\n", free_memory_pool->len);
@@ -382,7 +399,7 @@ unsigned long mem_swap(sorted_mem_pages** mem_hash_table, sorted_mem_pages* free
 
 //***********************************************************************************************
 //selects between different memory loading types, returns cost
-unsigned long load_memory(process* requesting_process, sorted_mem_pages** mem_hash_table, sorted_mem_pages* free_memory_pool, process_queue* working_queue, unsigned long process_page_req, unsigned long current_time, char memory_manager){
+unsigned long load_memory(process* requesting_process, sorted_mem_pages** mem_hash_table, sorted_mem_pages* free_memory_pool, process_queue* working_queue, unsigned long process_page_req, unsigned long current_time, char memory_manager, sorted_mem_pages* temp_evicted_pages){
     unsigned long free_page;
     unsigned long cost;
     unsigned long initial_pages_required = (requesting_process->memory_size_req / 4) - mem_hash_table[requesting_process->process_id]->len;
@@ -431,7 +448,7 @@ unsigned long load_memory(process* requesting_process, sorted_mem_pages** mem_ha
         early_swap = initial_pages_required - current_pages_required;
         //printf("early swap size of %lu\n", early_swap);
     }
-    cost =  (early_swap + mem_swap(mem_hash_table, free_memory_pool, working_queue, requesting_process->process_id, (4 - mem_hash_table[requesting_process->process_id]->len), current_time, memory_manager)) * LOADING_COST;
+    cost =  (early_swap + mem_swap(mem_hash_table, free_memory_pool, working_queue, requesting_process->process_id, (4 - mem_hash_table[requesting_process->process_id]->len), current_time, memory_manager, temp_evicted_pages)) * LOADING_COST;
     return cost;
 }
 
@@ -486,12 +503,15 @@ void first_come_first_served(process_queue* incoming_process_queue, sorted_mem_p
     unsigned long current_time = 0;
     unsigned long load_cost = 0;
 
+    //store pages evicted at the same time but in seperate evict events
+    sorted_mem_pages* temp_evicted_pages = construct_mem_pages();
+
     process_queue* working_queue = construct_queue();
     enqueue_arrived_processes(current_time, working_queue, incoming_process_queue);
 
     process* cur_process = queue_dequeue(working_queue);
     if (memory_manager != MEM_UNLIMITED){
-        load_cost = load_memory(cur_process, mem_hash_table, free_memory_pool, working_queue, cur_process->memory_size_req/4, current_time, memory_manager);
+        load_cost = load_memory(cur_process, mem_hash_table, free_memory_pool, working_queue, cur_process->memory_size_req/4, current_time, memory_manager, temp_evicted_pages);
         //apply loading penalty
         cur_process->job_time += (cur_process->memory_size_req/4 - mem_hash_table[cur_process->process_id]->len);
     }
@@ -505,7 +525,7 @@ void first_come_first_served(process_queue* incoming_process_queue, sorted_mem_p
 
         //evict if necessary
         if (memory_manager != MEM_UNLIMITED){
-            process_evict(free_memory_pool, mem_hash_table[cur_process->process_id], EVICT_ALL, current_time);
+            process_evict(free_memory_pool, mem_hash_table[cur_process->process_id], EVICT_ALL, current_time, temp_evicted_pages);
         }
         
         //prepare for next iteration and update
@@ -533,7 +553,7 @@ void first_come_first_served(process_queue* incoming_process_queue, sorted_mem_p
         cur_process = queue_dequeue(working_queue);
         //load required pages
         if (memory_manager != MEM_UNLIMITED){
-            load_cost = load_memory(cur_process, mem_hash_table, free_memory_pool, working_queue, cur_process->memory_size_req/4, current_time, memory_manager);
+            load_cost = load_memory(cur_process, mem_hash_table, free_memory_pool, working_queue, cur_process->memory_size_req/4, current_time, memory_manager, temp_evicted_pages);
             //apply loading penalty
             cur_process->job_time += (cur_process->memory_size_req/4 - mem_hash_table[cur_process->process_id]->len);
         }
@@ -553,6 +573,9 @@ void round_robin(process_queue* incoming_process_queue, sorted_mem_pages* free_m
     unsigned long load_cost = 0;
     process* cur_process;
 
+    //store pages evicted at the same time but in seperate evict events
+    sorted_mem_pages* temp_evicted_pages = construct_mem_pages();
+
     //used to store processes that have actually arrived
     process_queue* working_queue = construct_queue();
     enqueue_arrived_processes(current_time, working_queue, incoming_process_queue);
@@ -560,7 +583,7 @@ void round_robin(process_queue* incoming_process_queue, sorted_mem_pages* free_m
     //set first process and load memory
     cur_process = queue_dequeue(working_queue);
     if (memory_manager != MEM_UNLIMITED){
-        load_cost = load_memory(cur_process, mem_hash_table, free_memory_pool, working_queue, cur_process->memory_size_req/4, current_time, memory_manager);
+        load_cost = load_memory(cur_process, mem_hash_table, free_memory_pool, working_queue, cur_process->memory_size_req/4, current_time, memory_manager, temp_evicted_pages);
         //apply loading penalty
         cur_process->job_time += (cur_process->memory_size_req/4 - mem_hash_table[cur_process->process_id]->len);
     }
@@ -576,7 +599,9 @@ void round_robin(process_queue* incoming_process_queue, sorted_mem_pages* free_m
             cur_process->job_time = 0;
             enqueue_arrived_processes(current_time, working_queue, incoming_process_queue);
             if (memory_manager != MEM_UNLIMITED){
-                process_evict(free_memory_pool, mem_hash_table[cur_process->process_id], EVICT_ALL, current_time);
+                process_evict(free_memory_pool, mem_hash_table[cur_process->process_id], EVICT_ALL, current_time, temp_evicted_pages);
+                //print evictions
+                print_evict(temp_evicted_pages, current_time);
             }
             printf("%lu, FINISHED, id=%lu, proc-remaining=%lu\n", current_time, cur_process->process_id, working_queue->len);
 
@@ -610,9 +635,12 @@ void round_robin(process_queue* incoming_process_queue, sorted_mem_pages* free_m
             //printf("%lu, RUNNING, id=%lu, remaining-time=%lu\n", current_time, cur_process->process_id, cur_process->job_time);
             if (memory_manager != MEM_UNLIMITED){
                 //need to do integration work on this
-                load_cost = load_memory(cur_process, mem_hash_table, free_memory_pool, working_queue, cur_process->memory_size_req/4, current_time, memory_manager);
+                load_cost = load_memory(cur_process, mem_hash_table, free_memory_pool, working_queue, cur_process->memory_size_req/4, current_time, memory_manager, temp_evicted_pages);
                 //apply loading penalty
                 cur_process->job_time += (cur_process->memory_size_req/4 - mem_hash_table[cur_process->process_id]->len);
+
+                //print evictions
+                print_evict(temp_evicted_pages, current_time);
             }
             process_running_print(current_time, mem_hash_table, free_memory_pool, memory_size, cur_process, load_cost, memory_manager);
             current_time += load_cost;
@@ -628,9 +656,12 @@ void round_robin(process_queue* incoming_process_queue, sorted_mem_pages* free_m
             queue_enqueue(working_queue, cur_process);
             cur_process = queue_dequeue(working_queue);
             if (memory_manager != MEM_UNLIMITED){
-                load_cost = load_memory(cur_process, mem_hash_table, free_memory_pool, working_queue, cur_process->memory_size_req/4, current_time, memory_manager);
+                load_cost = load_memory(cur_process, mem_hash_table, free_memory_pool, working_queue, cur_process->memory_size_req/4, current_time, memory_manager, temp_evicted_pages);
                 //apply loading penalty
                 cur_process->job_time += (cur_process->memory_size_req/4 - mem_hash_table[cur_process->process_id]->len);
+
+                //print evictions
+                print_evict(temp_evicted_pages, current_time);
             }
             process_running_print(current_time, mem_hash_table, free_memory_pool, memory_size, cur_process, load_cost, memory_manager);
             current_time += load_cost;
