@@ -1,27 +1,27 @@
-Custom scheduler - load shortest first
+Scheduler - Shortest job-time first
 
-i) Algorithm:
-Find the process with shortest job-time. Run the selected process until job is complete.R repeat until all processes have been completed.
+i)
+Find the process with shortest job-time. 
+Run the selected process until job is complete.
+Repeat until all processes have been completed.
 
-ii) Strengths:
-This algorithm is strong in situations where the number of processes completed is the most important metric.
-Processes will be completed earlier, as large job-time processes will not stand in the way of the execution of processes with lower job-times. 
+ii)
+Strong when the number of processes completed is the most important metric.
+Processes will be completed sooner, as high job-time processes don't use time that could be spent on processes with lower job-times. 
 
-iii) Weaknesses:
-This algorithm perfoms poorly in situations where processes need to be executed and completed soon after being launched.
-This is because starvation of processes with large job-times can occur if processes with shorter job-times keep arriving, as they will always be executed in preference to large job-time processes.
+iii)
+Weak in situations where processes need to be completed soon after arrival.
+This is because starvation of processes with large job-times can occur if processes with shorter job-times keep arriving and being executed with preference.
 
 -----------------------------------------------------------------------------------------------------------------------------------------------------
+Memory manager - Evict from most recently used process first
 
-Custom memory manager - Virtual memory with most recently used first
+i) 
+Load MIN(free memory, memory requirement) to selected process. 
+If the process doesn't have MIN(16KB, memory requirement) memory available, swap memory from the most recently used process until it does.
 
-i) Algorithm:
-Load as much free memory as possible to selected process. 
-If the process doesn't have MIN(16KB, process memory requirement) memory available, free memory from processes until it is.
-Processes should be freed in order from most recently used to least recently used.
+ii) 
+This is the optimal management algorithm for round-robin scheduling, as the pages of the most recently used process are always furthest away from their next use.
 
-ii) Strengths:
-Memory is freed from processes that won't be used for a long time.
-
-iii) Weaknesses:
-Suffers general weaknesses of virtual memory.
+iii) 
+If the amount of available memory for the simulation is low enough that the cost of page faults > quantum, the process will never finish, as it's job time will continually increase.  
