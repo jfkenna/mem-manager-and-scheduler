@@ -1,0 +1,16 @@
+Custom scheduler - load shortest first
+
+i) Algorithm description:
+1: select process with shortest job-time
+2: run selected process until job is complete
+3: repeat
+
+
+ii) Strong scenarios:
+- situations where the number of processes completed is the most important metric.
+- situations where there are many low job-time processes and a handful of high job-time processes.
+
+iii) Weak scenarios:
+- situations where processes need to be executed and completed soon after being launched (this algo can cause starvation if small processes keep launching).
+
+Custom memory manager - 

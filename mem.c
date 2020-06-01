@@ -447,6 +447,9 @@ unsigned long mem_swap(sorted_mem_pages** mem_hash_table, sorted_mem_pages* free
 
     //until enough memory is freed, free all memory allocated single processes
     queue_node* removal_target_process = working_queue->front;
+    if (memory_manager == MEM_CUSTOM){
+        removal_target_process = working_queue->back;
+    }
     while (pages_required > 0 && removal_target_process != NULL){
         if (memory_manager != MEM_UNLIMITED){
             //printf("\nchecking if pid %lu has alloced mem we can take...", removal_target_process->value->process_id);
@@ -463,14 +466,18 @@ unsigned long mem_swap(sorted_mem_pages** mem_hash_table, sorted_mem_pages* free
             }
         }
         //printf("free mem pages after evict: %lu\n", free_memory_pool->len);
-        removal_target_process = removal_target_process->prev;
+        if (memory_manager == MEM_CUSTOM){
+            removal_target_process = removal_target_process->next;
+        }else{
+            removal_target_process = removal_target_process->prev;
+        }
     }
 
 
     //load memory into processs
     unsigned long pages_swapped = 0;
     unsigned long swap_page;
-    //printf("pages required %lu\n", total_pages_required);
+    //printf("pages required %lu\n", total_pages_required); 
     //printf("free mem pages %lu\n", free_memory_pool->len);
     while (pages_swapped < total_pages_required){
         //printf("%lu\n", free_memory_pool->len);
@@ -512,7 +519,6 @@ unsigned long load_memory(process* requesting_process, sorted_mem_pages** mem_ha
             }
             printf("END");
         }
-
         page_array_insert(mem_hash_table[requesting_process->process_id], free_page);
         current_pages_required -= 1;
     }
@@ -520,7 +526,7 @@ unsigned long load_memory(process* requesting_process, sorted_mem_pages** mem_ha
 
     //if requirements could be fulfilled from free memory, return early
     //printf("||process has len %lu\n", mem_hash_table[requesting_process->process_id]->len);
-    if ((memory_manager == MEM_VIRTUAL && mem_hash_table[requesting_process->process_id]->len >= 4) || current_pages_required == 0){
+    if (((memory_manager == MEM_VIRTUAL || memory_manager == MEM_CUSTOM) && mem_hash_table[requesting_process->process_id]->len >= 4) || current_pages_required == 0){
         //printf("as process now has len %lu, returning", mem_hash_table[requesting_process->process_id]->len);
         cost = (initial_pages_required - current_pages_required) * LOADING_COST;
         return cost;
@@ -530,11 +536,11 @@ unsigned long load_memory(process* requesting_process, sorted_mem_pages** mem_ha
     //idk if this early swap section even works, as it doesn't come up in the test cases as far as i can tell
     unsigned long early_swap = 0;
     unsigned long pages_to_get = (initial_pages_required - mem_hash_table[requesting_process->process_id]->len);
-    if (memory_manager == MEM_VIRTUAL){
-        
+    if (memory_manager == MEM_VIRTUAL || memory_manager == MEM_CUSTOM){
         early_swap = initial_pages_required - current_pages_required;
         //printf("early swap size of %lu\n", early_swap);
-        pages_to_get = 4 - mem_hash_table[requesting_process->process_id]->len;
+        pages_to_get = min(4, process_page_req) - mem_hash_table[requesting_process->process_id]->len;
+        //printf("pages to get: %lu", pages_to_get);
     }
     cost =  (early_swap + mem_swap(mem_hash_table, free_memory_pool, working_queue, requesting_process->process_id, pages_to_get, current_time, memory_manager, temp_evicted_pages)) * LOADING_COST;
     return cost;
@@ -584,8 +590,8 @@ process* queue_dequeue_shortest(process_queue* working_queue){
     //dequeue minimum value without harming queue
     //would be more efficient if a sorted array were used, but this method allows for more code reuse
 
-    printf("===========\nworking queue len %lu\n", working_queue->len);
-    printf("pid %lu\n", min_process->value->process_id);
+    //printf("===========\nworking queue len %lu\n", working_queue->len);
+    //printf("pid %lu\n", min_process->value->process_id);
 
     //edge case 1 --> 0
     if (working_queue->len == 1){
@@ -822,6 +828,9 @@ void round_robin(process_queue* incoming_process_queue, sorted_mem_pages* free_m
                 //need to do integration work on this
                 load_cost = load_memory(cur_process, mem_hash_table, free_memory_pool, working_queue, cur_process->memory_size_req/4, current_time, memory_manager, temp_evicted_pages);
                 //apply loading penalty
+                //printf("========\nloading penalty of %lu\n", (cur_process->memory_size_req/4 - mem_hash_table[cur_process->process_id]->len));
+                //printf("%lu\n", (cur_process->memory_size_req/4));
+                //printf("%lu\n======\n", mem_hash_table[cur_process->process_id]->len);
                 cur_process->job_time += (cur_process->memory_size_req/4 - mem_hash_table[cur_process->process_id]->len);
 
                 //print evictions
