@@ -63,6 +63,7 @@ struct Process{
     unsigned long process_id;
     unsigned long memory_size_req;
     unsigned long job_time;
+    unsigned long initial_job_time;
 };
 
 void print_process(process* target_process){
@@ -84,6 +85,9 @@ struct Stats{
 stats* construct_stats(){
     stats* new_stats = malloc(sizeof(stats));
     new_stats->endtimes = calloc(MAX_WINDOWS, sizeof(unsigned long));
+    for (unsigned long i = 0; i < MAX_WINDOWS; i++){
+        new_stats->endtimes[i] = EMPTY_VALUE;
+    }
     new_stats->overhead_aggregate = 0;
     new_stats->max_overhead = 0;
     new_stats->turnaround_aggregate = 0;
@@ -94,7 +98,7 @@ stats* construct_stats(){
 void update_stats(stats* overall_stats, process* completed_process, unsigned long current_time){
     unsigned long turnaround = current_time - completed_process->time_arrived;
     overall_stats->turnaround_aggregate += turnaround;
-    double overhead = turnaround/completed_process->job_time;
+    double overhead = turnaround/completed_process->initial_job_time;
     overall_stats->overhead_aggregate += overhead;
     if (overhead > overall_stats->max_overhead){
         overall_stats->max_overhead = overhead;
@@ -541,6 +545,64 @@ void enqueue_arrived_processes(unsigned long current_time, process_queue* workin
     }
 }
 
+
+
+process* queue_dequeue_shortest(process_queue* working_queue){
+    if (working_queue->len == 0){
+        return NULL;
+    }
+    queue_node* min_process = working_queue->front;
+    queue_node* cur_process = working_queue->front;
+
+    //find minimum 
+    while(cur_process != NULL){
+        if (cur_process->value->job_time < min_process->value->job_time){
+            min_process = cur_process;
+        }
+        cur_process = cur_process->prev;
+    }
+
+    //dequeue minimum value without harming queue
+    //would be more efficient if a sorted array were used, but this method allows for more code reuse
+
+    //edge case 1 --> 0
+    if (working_queue->len == 1){
+        working_queue->front = NULL;
+        working_queue->back = NULL;
+    }
+
+    //edge case 2 --> 1
+    queue_node* remaining = NULL;
+    if (working_queue->len == 2){
+        if (min_process->prev == NULL){
+            remaining = min_process->next;
+        }else{
+            remaining = min_process->prev;
+        }
+        working_queue->front = remaining;
+        working_queue->back = remaining;
+        
+    }
+
+    if (working_queue->len > 2){
+        if (min_process->next == NULL){
+            working_queue->front = min_process->prev;
+        }else{
+            if (min_process->prev == NULL){
+                working_queue->back = min_process->next;
+            }else{
+                min_process->prev->next = min_process->next;
+                min_process->next->prev = min_process->prev;
+            }
+        }
+    }
+
+    process* export = min_process->value;
+    working_queue->len -= 1;
+    return export;
+}
+
+
 //***********************************************************************************************
 //helper functions to output and perform simple prep work
 void process_running_print(unsigned long current_time, sorted_mem_pages** mem_hash_table, sorted_mem_pages* free_memory_pool, unsigned long memory_size, process* cur_process, unsigned long load_cost, char memory_manager, stats* overall_stats){
@@ -565,7 +627,7 @@ void process_running_print(unsigned long current_time, sorted_mem_pages** mem_ha
 //***********************************************************************************************
 //first come first served scheduler
 
-void first_come_first_served(process_queue* incoming_process_queue, sorted_mem_pages* free_memory_pool, sorted_mem_pages** mem_hash_table, unsigned long memory_size, char memory_manager, stats* overall_stats){
+void sequential_scheduler(process_queue* incoming_process_queue, sorted_mem_pages* free_memory_pool, sorted_mem_pages** mem_hash_table, unsigned long memory_size, char memory_manager, stats* overall_stats, char scheduler){
     unsigned long current_time = 0;
     unsigned long load_cost = 0;
 
@@ -622,8 +684,15 @@ void first_come_first_served(process_queue* incoming_process_queue, sorted_mem_p
             enqueue_arrived_processes(current_time, working_queue, incoming_process_queue);
         }
 
-        //set next process. apparently running starts at point pages begin to be loaded, rather than afterwards BUT all the pages that will be loaded have to be output when it starts running ? very fucky:/
-        cur_process = queue_dequeue(working_queue);
+        //if first come, just grab the next process from queue
+        if (scheduler == SCHEDULER_FCFS){
+            cur_process = queue_dequeue(working_queue);
+        }
+        //if shortest first, grab the shortest runtime process from queue
+        if (scheduler == SCHEDULER_CUSTOM){
+            cur_process = queue_dequeue_shortest(working_queue);
+        }
+        
         //load required pages
         if (memory_manager != MEM_UNLIMITED){
             load_cost = load_memory(cur_process, mem_hash_table, free_memory_pool, working_queue, cur_process->memory_size_req/4, current_time, memory_manager, temp_evicted_pages);
@@ -752,11 +821,6 @@ void round_robin(process_queue* incoming_process_queue, sorted_mem_pages* free_m
 
 
 //***********************************************************************************************
-//
-
-
-
-//***********************************************************************************************
 //hidden to actual assignment, stores incoming data with having to constantly do IO
 process_queue* load_processes(char* filename){
     //open file
@@ -775,6 +839,7 @@ process_queue* load_processes(char* filename){
     for (process* new_process = malloc(sizeof(process)); fscanf(file,"%lu %lu %lu %lu\r\n", &new_process->time_arrived, 
             &new_process->process_id, &new_process->memory_size_req, 
             &new_process->job_time) == 4;new_process = malloc(sizeof(process))){
+        new_process->initial_job_time = new_process->job_time;
         //enqueue process
         queue_enqueue(incoming_process_queue, new_process);
         
@@ -886,12 +951,10 @@ int main(int argc, char** argv){
         round_robin(incoming_process_queue, free_memory_pool, mem_usage_table, quantum, memory_size, memory_manager, overall_stats);
     }
     if (scheduling_algorithm == SCHEDULER_FCFS){
-        first_come_first_served(incoming_process_queue, free_memory_pool, mem_usage_table, memory_size, memory_manager, overall_stats);
+        sequential_scheduler(incoming_process_queue, free_memory_pool, mem_usage_table, memory_size, memory_manager, overall_stats, SCHEDULER_FCFS);
     }
     if (scheduling_algorithm == SCHEDULER_CUSTOM){
-        if (DEBUG){
-            printf("custom scheduler is not yet implemented yet\n");
-        }
+        sequential_scheduler(incoming_process_queue, free_memory_pool, mem_usage_table, memory_size, memory_manager, overall_stats, SCHEDULER_CUSTOM);
     }
     return 0;
 }
