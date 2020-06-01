@@ -426,6 +426,72 @@ sorted_mem_pages* populate_free_memory_pool(unsigned long available_memory){
 
 
 //***********************************************************************************************
+//queue helpers
+void remove_node(process_queue* working_queue, queue_node* target_node){
+    //edge case 1 --> 0
+    if (working_queue->len == 1){
+        working_queue->front = NULL;
+        working_queue->back = NULL;
+    }
+
+    //edge case 2 --> 1
+    queue_node* remaining = NULL;
+    if (working_queue->len == 2){
+        if (target_node == working_queue->back){
+            remaining = target_node->next;
+        }else{
+            remaining = target_node->prev;
+        }
+        remaining->prev = NULL;
+        remaining->next = NULL;
+        working_queue->front = remaining;
+        working_queue->back = remaining;
+    }
+
+    if (working_queue->len > 2){
+        if (target_node == working_queue->back){
+            printf("isBack");
+            target_node->next->prev = NULL;
+            working_queue->back = target_node->next;
+        }else{
+            if (target_node == working_queue->front){
+                printf("isFront");
+                target_node->prev->next = NULL;
+                working_queue->front = target_node->prev;
+            }else{
+                printf("isNeither");
+                target_node->prev->next = target_node->next;
+                target_node->next->prev = target_node->prev;
+            }
+        }
+    }
+    working_queue->len -= 1;
+}
+
+
+process* queue_dequeue_shortest_job(process_queue* working_queue){
+    if (working_queue->len == 0){
+        return NULL;
+    }
+    queue_node* min_process = working_queue->front;
+    queue_node* cur_process = working_queue->front;
+
+    //find minimum 
+    while(cur_process != NULL){
+        if (cur_process->value->initial_job_time < min_process->value->initial_job_time){
+            min_process = cur_process;
+        }
+        cur_process = cur_process->prev;
+    }
+
+    //dequeue minimum value without harming queue
+    //would be more efficient if a sorted array were used, but this method allows for more code reuse
+    remove_node(working_queue, min_process);
+    process* export = min_process->value;
+    return export;
+}
+
+//***********************************************************************************************
 //swapping
 
 unsigned long mem_swap(sorted_mem_pages** mem_hash_table, sorted_mem_pages* free_memory_pool, process_queue* working_queue, unsigned long requesting_process_id, unsigned long pages_required, unsigned long current_time, char memory_manager, sorted_mem_pages* temp_evicted_pages){
@@ -471,6 +537,7 @@ unsigned long mem_swap(sorted_mem_pages** mem_hash_table, sorted_mem_pages* free
         }else{
             removal_target_process = removal_target_process->prev;
         }
+        //printf("pid - %lu", removal_target_process->value->process_id);
     }
 
 
@@ -572,71 +639,6 @@ void enqueue_arrived_processes(unsigned long current_time, process_queue* workin
 
 
 
-process* queue_dequeue_shortest(process_queue* working_queue){
-    if (working_queue->len == 0){
-        return NULL;
-    }
-    queue_node* min_process = working_queue->front;
-    queue_node* cur_process = working_queue->front;
-
-    //find minimum 
-    while(cur_process != NULL){
-        if (cur_process->value->initial_job_time < min_process->value->initial_job_time){
-            min_process = cur_process;
-        }
-        cur_process = cur_process->prev;
-    }
-
-    //dequeue minimum value without harming queue
-    //would be more efficient if a sorted array were used, but this method allows for more code reuse
-
-    //printf("===========\nworking queue len %lu\n", working_queue->len);
-    //printf("pid %lu\n", min_process->value->process_id);
-
-    //edge case 1 --> 0
-    if (working_queue->len == 1){
-        working_queue->front = NULL;
-        working_queue->back = NULL;
-    }
-
-    //edge case 2 --> 1
-    queue_node* remaining = NULL;
-    if (working_queue->len == 2){
-        if (min_process == working_queue->back){
-            remaining = min_process->next;
-        }else{
-            remaining = min_process->prev;
-        }
-        remaining->prev = NULL;
-        remaining->next = NULL;
-        working_queue->front = remaining;
-        working_queue->back = remaining;
-    }
-
-    if (working_queue->len > 2){
-        if (min_process == working_queue->back){
-            printf("isBack");
-            min_process->next->prev = NULL;
-            working_queue->back = min_process->next;
-        }else{
-            if (min_process == working_queue->front){
-                printf("isFront");
-                min_process->prev->next = NULL;
-                working_queue->front = min_process->prev;
-            }else{
-                printf("isNeither");
-                min_process->prev->next = min_process->next;
-                min_process->next->prev = min_process->prev;
-            }
-        }
-    }
-
-    process* export = min_process->value;
-    working_queue->len -= 1;
-    return export;
-}
-
-
 //***********************************************************************************************
 //helper functions to output and perform simple prep work
 void process_running_print(unsigned long current_time, sorted_mem_pages** mem_hash_table, sorted_mem_pages* free_memory_pool, unsigned long memory_size, process* cur_process, unsigned long load_cost, char memory_manager){
@@ -675,7 +677,7 @@ void sequential_scheduler(process_queue* incoming_process_queue, sorted_mem_page
         cur_process = queue_dequeue(working_queue);
     }
     if (scheduler == SCHEDULER_CUSTOM){
-        cur_process = queue_dequeue_shortest(working_queue);
+        cur_process = queue_dequeue_shortest_job(working_queue);
     }
     
     if (memory_manager != MEM_UNLIMITED){
@@ -731,7 +733,7 @@ void sequential_scheduler(process_queue* incoming_process_queue, sorted_mem_page
         }
         //if shortest first, grab the shortest runtime process from queue
         if (scheduler == SCHEDULER_CUSTOM){
-            cur_process = queue_dequeue_shortest(working_queue);
+            cur_process = queue_dequeue_shortest_job(working_queue);
         }
         
         //load required pages
@@ -893,6 +895,7 @@ process_queue* load_processes(char* filename){
 }
 
 
+//TODO!!! ENSURE QUEUE IS SORTED BY TIME WHEN FIRST LOADING IN!!!!
 //***********************************************************************************************
 int main(int argc, char** argv){
     //disable print buffer
