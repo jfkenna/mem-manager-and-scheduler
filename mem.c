@@ -103,7 +103,7 @@ void update_stats(stats* overall_stats, process* completed_process, unsigned lon
     if (overhead > overall_stats->max_overhead){
         overall_stats->max_overhead = overhead;
     }
-    overall_stats->endtimes[((current_time -1 + WINDOW_SIZE-1)/WINDOW_SIZE)-1] += 1;
+    overall_stats->endtimes[((current_time + WINDOW_SIZE-1)/WINDOW_SIZE)-1] += 1;
     //printf("%lu stat update: ", (current_time));
     //printf("window %lu now has %lu entries\n", ((current_time-1 + WINDOW_SIZE-1)/WINDOW_SIZE)-1, overall_stats->endtimes[((current_time-1 + WINDOW_SIZE-1)/WINDOW_SIZE)-1]);
     overall_stats->n_processes += 1;
