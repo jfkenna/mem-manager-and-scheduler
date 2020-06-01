@@ -86,7 +86,7 @@ stats* construct_stats(){
     stats* new_stats = malloc(sizeof(stats));
     new_stats->endtimes = calloc(MAX_WINDOWS, sizeof(unsigned long));
     for (unsigned long i = 0; i < MAX_WINDOWS; i++){
-        new_stats->endtimes[i] = EMPTY_VALUE;
+        new_stats->endtimes[i] = 0;
     }
     new_stats->overhead_aggregate = 0;
     new_stats->max_overhead = 0;
@@ -98,37 +98,41 @@ stats* construct_stats(){
 void update_stats(stats* overall_stats, process* completed_process, unsigned long current_time){
     unsigned long turnaround = current_time - completed_process->time_arrived;
     overall_stats->turnaround_aggregate += turnaround;
-    double overhead = turnaround/completed_process->initial_job_time;
+    double overhead = (double)turnaround/completed_process->initial_job_time;
     overall_stats->overhead_aggregate += overhead;
     if (overhead > overall_stats->max_overhead){
         overall_stats->max_overhead = overhead;
     }
-    overall_stats->endtimes[(current_time + WINDOW_SIZE-1)/WINDOW_SIZE] += 1;
+    overall_stats->endtimes[((current_time -1 + WINDOW_SIZE-1)/WINDOW_SIZE)-1] += 1;
+    //printf("%lu stat update: ", (current_time));
+    //printf("window %lu now has %lu entries\n", ((current_time-1 + WINDOW_SIZE-1)/WINDOW_SIZE)-1, overall_stats->endtimes[((current_time-1 + WINDOW_SIZE-1)/WINDOW_SIZE)-1]);
     overall_stats->n_processes += 1;
 }
 
 void output_final_stats(stats* overall_stats, unsigned long current_time){
     //get throughput data
+    unsigned long last_populated_window;
     unsigned long throughput_min = EMPTY_VALUE; //max unsigned long
     unsigned long throughput_max = 0;
     unsigned long throughput_avg = 0;
     for (unsigned long i = 0; i < MAX_WINDOWS; i++){
         //as soon as interval that doesn't have anything in it appears, go next
         //not sure if this assumption is correct but who cares
-        if (overall_stats->endtimes[i] == 0){
-            throughput_avg = throughput_avg / i;
-            break;
+        if (overall_stats->endtimes[i] != 0){
+            last_populated_window = i;
         }
         throughput_avg += overall_stats->endtimes[i]; //is actually an aggregate until the loop breaks
-        if (overall_stats->endtimes[i] < throughput_min){
+        if (overall_stats->endtimes[i] < throughput_min && overall_stats->endtimes[i] != 0){
             throughput_min = overall_stats->endtimes[i];
         }
         if (overall_stats->endtimes[i] > throughput_max){
             throughput_max = overall_stats->endtimes[i];
         }
     }
-    printf("Throughput %lu, %lu, %lu\n", throughput_min, throughput_max, throughput_avg);
-    printf("Turnaround time %lu\n", overall_stats->turnaround_aggregate / overall_stats->n_processes);
+    //printf("agg %lu, n_windows %lu", throughput_avg, last_populated_window+1);
+    throughput_avg = (throughput_avg + (last_populated_window+1) - 1)/ (last_populated_window+1);
+    printf("Throughput %lu, %lu, %lu\n", throughput_avg, throughput_min, throughput_max);
+    printf("Turnaround time %lu\n", (overall_stats->turnaround_aggregate + (overall_stats->n_processes - 1)) / overall_stats->n_processes);
     printf("Time overhead %.2lf %.2lf\n", overall_stats->max_overhead, overall_stats->overhead_aggregate/overall_stats->n_processes);
     printf("Makespan %lu\n", current_time);
 }
@@ -605,7 +609,7 @@ process* queue_dequeue_shortest(process_queue* working_queue){
 
 //***********************************************************************************************
 //helper functions to output and perform simple prep work
-void process_running_print(unsigned long current_time, sorted_mem_pages** mem_hash_table, sorted_mem_pages* free_memory_pool, unsigned long memory_size, process* cur_process, unsigned long load_cost, char memory_manager, stats* overall_stats){
+void process_running_print(unsigned long current_time, sorted_mem_pages** mem_hash_table, sorted_mem_pages* free_memory_pool, unsigned long memory_size, process* cur_process, unsigned long load_cost, char memory_manager){
     if (memory_manager == MEM_UNLIMITED){
         printf("%lu, RUNNING, id=%lu, remaining-time=%lu\n", current_time, cur_process->process_id, cur_process->job_time);
     }else{
@@ -620,7 +624,6 @@ void process_running_print(unsigned long current_time, sorted_mem_pages** mem_ha
             }
         }
     }
-    update_stats(overall_stats, cur_process, current_time);
 }
 
 
@@ -646,7 +649,7 @@ void sequential_scheduler(process_queue* incoming_process_queue, sorted_mem_page
         //print evicts
         print_evict(temp_evicted_pages, current_time);
     }
-    process_running_print(current_time, mem_hash_table, free_memory_pool, memory_size, cur_process, load_cost, memory_manager, overall_stats);
+    process_running_print(current_time, mem_hash_table, free_memory_pool, memory_size, cur_process, load_cost, memory_manager);
     current_time += load_cost;
 
     while (1){
@@ -664,6 +667,7 @@ void sequential_scheduler(process_queue* incoming_process_queue, sorted_mem_page
         
         //prepare for next iteration and update
         enqueue_arrived_processes(current_time, working_queue, incoming_process_queue);
+        update_stats(overall_stats, cur_process, current_time);
         printf("%lu, FINISHED, id=%lu, proc-remaining=%lu\n", current_time, cur_process->process_id, working_queue->len);
 
         //wait for new processes if required
@@ -702,7 +706,7 @@ void sequential_scheduler(process_queue* incoming_process_queue, sorted_mem_page
             //print evicts
             print_evict(temp_evicted_pages, current_time);
         }
-        process_running_print(current_time, mem_hash_table, free_memory_pool, memory_size, cur_process, load_cost, memory_manager, overall_stats);
+        process_running_print(current_time, mem_hash_table, free_memory_pool, memory_size, cur_process, load_cost, memory_manager);
         current_time += load_cost; //load cost is always 0 for mem_unlimited
     }
 }
@@ -735,7 +739,7 @@ void round_robin(process_queue* incoming_process_queue, sorted_mem_pages* free_m
         //print evicts
         print_evict(temp_evicted_pages, current_time);
     }
-    process_running_print(current_time, mem_hash_table, free_memory_pool, memory_size, cur_process, load_cost, memory_manager, overall_stats);
+    process_running_print(current_time, mem_hash_table, free_memory_pool, memory_size, cur_process, load_cost, memory_manager);
     current_time += load_cost;
 
     //run until no processes remain
@@ -751,6 +755,7 @@ void round_robin(process_queue* incoming_process_queue, sorted_mem_pages* free_m
                 //print evictions
                 print_evict(temp_evicted_pages, current_time);
             }
+            update_stats(overall_stats, cur_process, current_time);
             printf("%lu, FINISHED, id=%lu, proc-remaining=%lu\n", current_time, cur_process->process_id, working_queue->len);
 
             //if no jobs can be swapped to, simulate waiting for the next job to arrive
@@ -791,7 +796,7 @@ void round_robin(process_queue* incoming_process_queue, sorted_mem_pages* free_m
                 //print evictions
                 print_evict(temp_evicted_pages, current_time);
             }
-            process_running_print(current_time, mem_hash_table, free_memory_pool, memory_size, cur_process, load_cost, memory_manager, overall_stats);
+            process_running_print(current_time, mem_hash_table, free_memory_pool, memory_size, cur_process, load_cost, memory_manager);
             current_time += load_cost;
             
 
@@ -812,7 +817,7 @@ void round_robin(process_queue* incoming_process_queue, sorted_mem_pages* free_m
                 //print evictions
                 print_evict(temp_evicted_pages, current_time);
             }
-            process_running_print(current_time, mem_hash_table, free_memory_pool, memory_size, cur_process, load_cost, memory_manager, overall_stats);
+            process_running_print(current_time, mem_hash_table, free_memory_pool, memory_size, cur_process, load_cost, memory_manager);
             current_time += load_cost;
         }
         
