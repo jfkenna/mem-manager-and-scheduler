@@ -584,6 +584,9 @@ process* queue_dequeue_shortest(process_queue* working_queue){
     //dequeue minimum value without harming queue
     //would be more efficient if a sorted array were used, but this method allows for more code reuse
 
+    printf("===========\nworking queue len %lu\n", working_queue->len);
+    printf("pid %lu\n", min_process->value->process_id);
+
     //edge case 1 --> 0
     if (working_queue->len == 1){
         working_queue->front = NULL;
@@ -598,18 +601,24 @@ process* queue_dequeue_shortest(process_queue* working_queue){
         }else{
             remaining = min_process->prev;
         }
+        remaining->prev = NULL;
+        remaining->next = NULL;
         working_queue->front = remaining;
         working_queue->back = remaining;
-        
     }
 
     if (working_queue->len > 2){
         if (min_process == working_queue->back){
+            printf("isBack");
+            min_process->next->prev = NULL;
             working_queue->back = min_process->next;
         }else{
             if (min_process == working_queue->front){
+                printf("isFront");
+                min_process->prev->next = NULL;
                 working_queue->front = min_process->prev;
             }else{
+                printf("isNeither");
                 min_process->prev->next = min_process->next;
                 min_process->next->prev = min_process->prev;
             }
