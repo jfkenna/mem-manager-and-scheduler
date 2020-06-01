@@ -575,7 +575,7 @@ process* queue_dequeue_shortest(process_queue* working_queue){
 
     //find minimum 
     while(cur_process != NULL){
-        if (cur_process->value->job_time < min_process->value->job_time){
+        if (cur_process->value->initial_job_time < min_process->value->initial_job_time){
             min_process = cur_process;
         }
         cur_process = cur_process->prev;
@@ -593,7 +593,7 @@ process* queue_dequeue_shortest(process_queue* working_queue){
     //edge case 2 --> 1
     queue_node* remaining = NULL;
     if (working_queue->len == 2){
-        if (min_process->prev == NULL){
+        if (min_process == working_queue->back){
             remaining = min_process->next;
         }else{
             remaining = min_process->prev;
@@ -604,11 +604,11 @@ process* queue_dequeue_shortest(process_queue* working_queue){
     }
 
     if (working_queue->len > 2){
-        if (min_process->next == NULL){
-            working_queue->front = min_process->prev;
+        if (min_process == working_queue->back){
+            working_queue->back = min_process->next;
         }else{
-            if (min_process->prev == NULL){
-                working_queue->back = min_process->next;
+            if (min_process == working_queue->front){
+                working_queue->front = min_process->prev;
             }else{
                 min_process->prev->next = min_process->next;
                 min_process->next->prev = min_process->prev;
@@ -654,8 +654,15 @@ void sequential_scheduler(process_queue* incoming_process_queue, sorted_mem_page
 
     process_queue* working_queue = construct_queue();
     enqueue_arrived_processes(current_time, working_queue, incoming_process_queue);
+    process* cur_process;
 
-    process* cur_process = queue_dequeue(working_queue);
+    if (scheduler == SCHEDULER_FCFS){
+        cur_process = queue_dequeue(working_queue);
+    }
+    if (scheduler == SCHEDULER_CUSTOM){
+        cur_process = queue_dequeue_shortest(working_queue);
+    }
+    
     if (memory_manager != MEM_UNLIMITED){
         load_cost = load_memory(cur_process, mem_hash_table, free_memory_pool, working_queue, cur_process->memory_size_req/4, current_time, memory_manager, temp_evicted_pages);
         //apply loading penalty
