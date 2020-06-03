@@ -21,7 +21,7 @@ Load MIN(free memory, memory requirement) to selected process.
 If the process doesn't have MIN(16KB, memory requirement) memory available, swap memory from the most recently used process until it does.
 
 ii) 
-This is the optimal management algorithm for round-robin scheduling, as the pages of the most recently used process are always furthest away from their next use.
+This is the optimal management algorithm when the most recently used process is furthest away from being run again next use. This makes it strong with round-robin scheduling.
 
 iii) 
-If the amount of available memory for the simulation is low enough that the cost of page faults > quantum, the process will never finish, as it's job time will continually increase.  
+Weaker in situations where some processes are given far more quantums than others, as such processes will be freed then reloaded very frequently.
