@@ -7,8 +7,8 @@ CC = gcc
 %.o: %.c $(DEPS)
 	$(CC) -c -o $@ $< $(CFLAGS)
 
-main: process.o stats.o queue.o sorted_pages.o memory_manager.o schedulers.o runner.o
-	$(CC) -o scheduler process.o stats.o queue.o sorted_pages.o memory_manager.o schedulers.o runner.o
+main: stats.o queue.o sorted_pages.o memory_manager.o schedulers.o runner.o
+	$(CC) -o scheduler stats.o queue.o sorted_pages.o memory_manager.o schedulers.o runner.o
 #make clean structure obtained from
 #https://www.gnu.org/software/make/manual/html_node/Cleanup.html
 .PHONY : clean

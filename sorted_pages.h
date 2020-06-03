@@ -1,9 +1,14 @@
 #ifndef SORTED_H
 #define SORTED_H
+
+//***********************************************************************************************
+//dynamic array for storing page files that maintains reverse sorted order on insert
+
 typedef struct Sorted_mem_pages sorted_mem_pages;
+//len vs alloced_len: //number of elements vs number of elements that can fit in allocated memory
 struct Sorted_mem_pages{
-    unsigned long len; //number of elements
-    unsigned long alloced_len; //number of elements that can fit in allocated memory
+    unsigned long len;
+    unsigned long alloced_len; 
     unsigned long* page_array;
 };
 

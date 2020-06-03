@@ -1,10 +1,11 @@
-//***********************************************************************************************
-//stats structure and helper functions
 #include "stats.h"
 #include "stdio.h"
 #include "stdlib.h"
 #include "config.h"
 
+
+//***********************************************************************************************
+//stats constructor and freer
 stats* construct_stats(){
     stats* new_stats = malloc(sizeof(stats));
     new_stats->endtimes = calloc(MAX_WINDOWS, sizeof(unsigned long));
@@ -23,6 +24,9 @@ void free_stats(stats* target){
     free(target);
 }
 
+
+//***********************************************************************************************
+//updates stat aggregates, tables, and maximums. called when processes finish running
 void update_stats(stats* overall_stats, process* completed_process, unsigned long current_time){
     unsigned long turnaround = current_time - completed_process->time_arrived;
     overall_stats->turnaround_aggregate += turnaround;
@@ -32,26 +36,25 @@ void update_stats(stats* overall_stats, process* completed_process, unsigned lon
         overall_stats->max_overhead = overhead;
     }
     overall_stats->endtimes[((current_time + WINDOW_SIZE-1)/WINDOW_SIZE)-1] += 1;
-    //printf("%lu stat update: ", (current_time));
-    //printf("window %lu now has %lu entries\n", ((current_time-1 + WINDOW_SIZE-1)/WINDOW_SIZE)-1, overall_stats->endtimes[((current_time-1 + WINDOW_SIZE-1)/WINDOW_SIZE)-1]);
     overall_stats->n_processes += 1;
 }
 
+
+//***********************************************************************************************
+//calculates and outputs overall stats for simulation
 void output_final_stats(stats* overall_stats, unsigned long current_time){
     
-
     //if we have travelled past a zero window and later discover a filled window, set min to zero
     unsigned long possible_zero_min = 0;
-    
 
     //get throughput data
     unsigned long throughput_min = EMPTY_VALUE; //max unsigned long
     unsigned long throughput_max = 0;
     unsigned long throughput_avg = 0;
     unsigned long last_populated_window;
+
+    //calculate window statistics and get averages from aggregates
     for (unsigned long i = 0; i < MAX_WINDOWS; i++){
-        //as soon as interval that doesn't have anything in it appears, go next
-        //not sure if this assumption is correct but who cares
         if (overall_stats->endtimes[i] != 0){
             last_populated_window = i;
             if (possible_zero_min){
@@ -70,7 +73,6 @@ void output_final_stats(stats* overall_stats, unsigned long current_time){
             throughput_max = overall_stats->endtimes[i];
         }
     }
-    //printf("agg %lu, n_windows %lu", throughput_avg, last_populated_window+1);
 
     //output stats
     throughput_avg = (throughput_avg + (last_populated_window+1) - 1)/ (last_populated_window+1);

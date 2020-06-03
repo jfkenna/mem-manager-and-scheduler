@@ -1,6 +1,9 @@
 #ifndef STATS_H
 #define STATS_H
 #include "process.h"
+
+//***********************************************************************************************
+//records statistics for the simulation
 typedef struct Stats stats;
 struct Stats{
     unsigned long* endtimes;

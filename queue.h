@@ -1,8 +1,9 @@
-//***********************************************************************************************
-//queue data structure and helper functions
 #ifndef QUEUE_H
 #define QUEUE_H
 #include "process.h"
+
+//***********************************************************************************************
+//process queue, used to store incoming processes and manage what processes should be executed next
 
 typedef struct Queue_node queue_node;
 struct Queue_node{

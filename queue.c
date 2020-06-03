@@ -2,6 +2,10 @@
 #include "stdlib.h"
 #include "stdio.h"
 
+
+//***********************************************************************************************
+//queue constructor
+
 process_queue* construct_queue(){
     process_queue* new_queue = malloc(sizeof(process_queue));
     new_queue->front = NULL;
@@ -11,6 +15,8 @@ process_queue* construct_queue(){
 
 }
 
+//***********************************************************************************************
+//enqueues process into queue
 void queue_enqueue(process_queue* queue, process* new_process){
     queue_node* new_node = malloc(sizeof(queue_node));
     new_node->value = new_process;
@@ -26,8 +32,10 @@ void queue_enqueue(process_queue* queue, process* new_process){
     queue->len += 1;
 }
 
+
+//***********************************************************************************************
+//pops process from queue
 process* queue_dequeue(process_queue* queue){
-    //if queue has nothing to dequeue
     if (queue->len == 0){
         return NULL;
     }
@@ -50,20 +58,9 @@ process* queue_dequeue(process_queue* queue){
     return return_val;
 }
 
-void print_queue(process_queue* queue){
-    printf("printing queue: back --> front ordering\n");
-    queue_node* cur = queue->back;
-    unsigned long i = 0;
-    while(cur != NULL){
-        printf("[%lu]: ", i);
-        print_process(cur->value);
-        cur = cur->next;
-        i += 1;
-    }
-}
 
 //***********************************************************************************************
-//queue helpers
+//removes provided node from queue
 void remove_node(process_queue* working_queue, queue_node* target_node){
     //edge case 1 --> 0
     if (working_queue->len == 1){
@@ -106,7 +103,8 @@ void remove_node(process_queue* working_queue, queue_node* target_node){
     working_queue->len -= 1;
 }
 
-
+//***********************************************************************************************
+//returns the process in the queue with the shortest job-time
 process* queue_dequeue_shortest_job(process_queue* working_queue){
     if (working_queue->len == 0){
         return NULL;
@@ -122,8 +120,6 @@ process* queue_dequeue_shortest_job(process_queue* working_queue){
         cur_process = cur_process->prev;
     }
 
-    //dequeue minimum value without harming queue
-    //would be more efficient if a sorted array were used, but this method allows for more code reuse
     process* export = min_process->value;
     remove_node(working_queue, min_process);
     return export;

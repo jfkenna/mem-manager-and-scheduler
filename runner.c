@@ -14,16 +14,13 @@
 
 
 //***********************************************************************************************
-//hidden to actual assignment, stores incoming data with having to constantly do IO
+//creates a queue of incoming data that the simulation queries to determine if anything has arrived
 process_queue* load_processes(char* filename){
     //open file
     FILE* file = fopen(filename, "r");
 
     //if file open failed
     if (file == NULL){
-        if (DEBUG){
-            printf("null file, returning...\n");
-        }
         return NULL;
     }
     
@@ -43,106 +40,64 @@ process_queue* load_processes(char* filename){
 }
 
 
-//TODO!!! ENSURE QUEUE IS SORTED BY TIME WHEN FIRST LOADING IN!!!!
 //***********************************************************************************************
+//runs simulation
+
 int main(int argc, char** argv){
     //disable print buffer
     setvbuf(stdout, NULL, _IONBF, 0);
 
-    //get control args
     int opt;
     unsigned long quantum = 0;
     unsigned long memory_size = 0;
     char memory_manager = '\0';
     char scheduling_algorithm = '\0';
     char* filename = NULL;
+
+    //read command line args
     while ((opt = getopt(argc, argv, "f:a:m:s:q:")) != -1){
-        if (DEBUG){
-            printf("new param - ");
-        }
-        
         if (opt == 'f'){
             filename = optarg;
-            if (DEBUG){
-                printf("filename: %s\n", filename);
-            }
-            
         }
         if (opt == 'a'){
             scheduling_algorithm = optarg[0];
-            if (DEBUG){
-                printf("scheduling algorithm: %c\n", scheduling_algorithm);
-            }
-            
         }
         if (opt == 'm'){
             memory_manager = optarg[0];
-            if (DEBUG){
-                printf("allocator type: %c\n", memory_manager);
-            }
-            
         }
         if (opt == 's'){
-            memory_size = strtoul(optarg, NULL, 0);
-            if (DEBUG){
-                printf("memory size: %lu\n", memory_size);
-            }
-            
+            memory_size = strtoul(optarg, NULL, 0);  
         }
         if (opt == 'q'){
-            quantum = strtoul(optarg, NULL, 0);
-            if (DEBUG){
-                printf("quantum: %lu\n", quantum);
-            }
-            
+            quantum = strtoul(optarg, NULL, 0); 
         }
         if (opt == '?'){
-            if (DEBUG){
-                printf("1 or more args not recognised... returning\n");
-            }
-            
             return 1;
         }
     }
 
-    if (scheduling_algorithm == '\0' || memory_manager == '\0' || filename == NULL){
-        if (DEBUG){
-            printf("a required arg wasn't set... returning\n");
-        }
-        
+    if (scheduling_algorithm == '\0' || memory_manager == '\0' || filename == NULL){  
         return 1;
     }
 
     //read data
-    if (DEBUG){
-        printf("attempting to read file: \"%s\"\n", filename);
-    }
-    
     process_queue* incoming_process_queue = load_processes(filename);
-    if (DEBUG){
-        print_queue(incoming_process_queue);
-    }
     
 
-    //handle errors during read
+    //stop if errors occur during read
     if (incoming_process_queue->len == 0){
-        if (DEBUG){
-            printf("error during file read... returning...\n");
-        }
         return 1;
     }
 
-    //initialize memory pool and mem hashtable if they will be used
-    //set to 1 to avoid crashes when populating memory
+    //initialize memory pool,memory hashtable, and stats
     if (memory_size == 0){
-        memory_size = 1;
+        memory_size = 1; //set to 1, as program relies on the memory pool having size >= 1
     }
     sorted_mem_pages* free_memory_pool = populate_free_memory_pool(memory_size);
     sorted_mem_pages** mem_usage_table = create_hash_table();
     stats* overall_stats = construct_stats();
 
-    
-    //run round robin scheduler with unlimited memory
+    //select and run scheduler with provided algorithms
     if (scheduling_algorithm == SCHEDULER_RR){
         round_robin(incoming_process_queue, free_memory_pool, mem_usage_table, quantum, memory_size, memory_manager, overall_stats);
     }
@@ -153,6 +108,7 @@ int main(int argc, char** argv){
         sequential_scheduler(incoming_process_queue, free_memory_pool, mem_usage_table, memory_size, memory_manager, overall_stats, SCHEDULER_CUSTOM);
     }
 
+    //free before exit
     free_sorted_mem_pages(free_memory_pool);
     for (unsigned long i = 0; i < MAX_NUM_PROCESSES; i++){
         free_sorted_mem_pages(mem_usage_table[i]);

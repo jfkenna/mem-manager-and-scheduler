@@ -1,5 +1,9 @@
 #ifndef PROCESS_H
 #define PROCESS_H
+
+//***********************************************************************************************
+//stores information about processes
+
 typedef struct Process process;
 struct Process{
     unsigned long time_arrived;

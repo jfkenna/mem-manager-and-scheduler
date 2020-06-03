@@ -4,13 +4,9 @@
 #include "stdlib.h"
 
 //***********************************************************************************************
-//scheduler helper, adds arrived processes to working queue
+//updates working queue with any arrived processes
 void enqueue_arrived_processes(unsigned long current_time, process_queue* working_queue, process_queue* incoming_process_queue){
     if (incoming_process_queue->len == 0){
-        if (DEBUG){
-            printf("no new processes have arrived\n");
-        }
-        
         return;
     }
 
@@ -29,7 +25,7 @@ void enqueue_arrived_processes(unsigned long current_time, process_queue* workin
 
 
 //***********************************************************************************************
-//helper functions to output and perform simple prep work
+//ouputs RUNNING data
 void process_running_print(unsigned long current_time, sorted_mem_pages** mem_hash_table, sorted_mem_pages* free_memory_pool, unsigned long memory_size, process* cur_process, unsigned long load_cost, char memory_manager){
     if (memory_manager == MEM_UNLIMITED){
         printf("%lu, RUNNING, id=%lu, remaining-time=%lu\n", current_time, cur_process->process_id, cur_process->job_time);
@@ -88,8 +84,6 @@ void sequential_scheduler(process_queue* incoming_process_queue, sorted_mem_page
         //evict if necessary
         if (memory_manager != MEM_UNLIMITED){
             process_evict(free_memory_pool, mem_hash_table[cur_process->process_id], EVICT_ALL, current_time, temp_evicted_pages);
-
-            //print evicts
             print_evict(temp_evicted_pages, current_time);
         }
         
@@ -100,14 +94,9 @@ void sequential_scheduler(process_queue* incoming_process_queue, sorted_mem_page
 
         //wait for new processes if required
         if (working_queue->len == 0){
-            if (DEBUG){
-                printf("waiting for new process...\n");
-            }
-            //all processes complete
+
+            //return once all processes are complete
             if (incoming_process_queue->len == 0){
-                if (DEBUG){
-                    printf("all processes complete...\n");
-                }
                 output_final_stats(overall_stats, current_time);
                 free(cur_process);
                 free_sorted_mem_pages(temp_evicted_pages);
@@ -120,7 +109,7 @@ void sequential_scheduler(process_queue* incoming_process_queue, sorted_mem_page
         }
 
         free(cur_process);
-        //if first come, just grab the next process from queue
+        //if FCFS grab the next process from queue
         if (scheduler == SCHEDULER_FCFS){
             cur_process = queue_dequeue(working_queue);
         }
@@ -139,16 +128,13 @@ void sequential_scheduler(process_queue* incoming_process_queue, sorted_mem_page
             print_evict(temp_evicted_pages, current_time);
         }
         process_running_print(current_time, mem_hash_table, free_memory_pool, memory_size, cur_process, load_cost, memory_manager);
-        current_time += load_cost; //load cost is always 0 for mem_unlimited
+        current_time += load_cost;
     }
 }
 
 
 //***********************************************************************************************
 //round robin scheduler
-
-
-
 void round_robin(process_queue* incoming_process_queue, sorted_mem_pages* free_memory_pool, sorted_mem_pages** mem_hash_table, unsigned long quantum, unsigned long memory_size, char memory_manager, stats* overall_stats){
     unsigned long current_time = 0;
     unsigned long load_cost = 0;
@@ -192,26 +178,15 @@ void round_robin(process_queue* incoming_process_queue, sorted_mem_pages* free_m
             free(cur_process);
             //if no jobs can be swapped to, simulate waiting for the next job to arrive
             if (working_queue->len == 0){
-                if (DEBUG){
-                    printf("nothing in working queue...\n");
-                }
-                
+
                 //wait for processes that haven't yet arrived
                 if (incoming_process_queue->len != 0){
-                    if (DEBUG){
-                        printf("waiting for processes...\n");
-                    }
-                    
                     current_time += (incoming_process_queue->front->value->time_arrived - current_time);
                     //enqueue arrived processes
                     enqueue_arrived_processes(current_time, working_queue, incoming_process_queue);
                 }else{
                     //if no jobs exist to work on and no jobs will arrive in the future, return
-                    if (DEBUG){
-                        printf("all processes complete\n");
-                    }
                     output_final_stats(overall_stats, current_time);
-
                     free_sorted_mem_pages(temp_evicted_pages);
                     free(working_queue);               
                     return;
@@ -219,15 +194,9 @@ void round_robin(process_queue* incoming_process_queue, sorted_mem_pages* free_m
             }
             cur_process = queue_dequeue(working_queue);
 
-            //apparently running starts before memory is loaded ZZZZZZZ
-            //printf("%lu, RUNNING, id=%lu, remaining-time=%lu\n", current_time, cur_process->process_id, cur_process->job_time);
             if (memory_manager != MEM_UNLIMITED){
-                //need to do integration work on this
                 load_cost = load_memory(cur_process, mem_hash_table, free_memory_pool, working_queue, cur_process->memory_size_req/4, current_time, memory_manager, temp_evicted_pages);
                 //apply loading penalty
-                //printf("========\nloading penalty of %lu\n", (cur_process->memory_size_req/4 - mem_hash_table[cur_process->process_id]->len));
-                //printf("%lu\n", (cur_process->memory_size_req/4));
-                //printf("%lu\n======\n", mem_hash_table[cur_process->process_id]->len);
                 cur_process->job_time += (cur_process->memory_size_req/4 - mem_hash_table[cur_process->process_id]->len);
 
                 //print evictions
@@ -237,7 +206,7 @@ void round_robin(process_queue* incoming_process_queue, sorted_mem_pages* free_m
             current_time += load_cost;
             
 
-        //if job won't be finished this quantum, shuffle it to the back and select a new job
+        //if job won't be finished this quantum, shuffle process to the back of the queue and select a new job
         }else{
             //update time values and enqueue new processes
             current_time += quantum;
@@ -250,8 +219,6 @@ void round_robin(process_queue* incoming_process_queue, sorted_mem_pages* free_m
                 load_cost = load_memory(cur_process, mem_hash_table, free_memory_pool, working_queue, cur_process->memory_size_req/4, current_time, memory_manager, temp_evicted_pages);
                 //apply loading penalty
                 cur_process->job_time += (cur_process->memory_size_req/4 - mem_hash_table[cur_process->process_id]->len);
-
-                //print evictions
                 print_evict(temp_evicted_pages, current_time);
             }
             process_running_print(current_time, mem_hash_table, free_memory_pool, memory_size, cur_process, load_cost, memory_manager);

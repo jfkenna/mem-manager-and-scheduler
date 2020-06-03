@@ -1,12 +1,11 @@
-//***********************************************************************************************
-//memory storage data structures and helper functions
-#ifndef PROCESS_H
-#define PROCESS_H
 #include "sorted_pages.h"
 #include "stdio.h"
 #include "stdlib.h"
 #include "config.h"
 
+
+//***********************************************************************************************
+//ordered page constructor / freer
 sorted_mem_pages* construct_mem_pages(){
     sorted_mem_pages* new_pages = malloc(sizeof(sorted_mem_pages));
     new_pages->len = 0;
@@ -22,18 +21,12 @@ void free_sorted_mem_pages(sorted_mem_pages* target){
     free(target);
 }
 
-//maintain reverse sorted order on insertion
+
+//***********************************************************************************************
+//insert page number while maintaining reverse sorted order
 void page_array_insert(sorted_mem_pages* page_storage, unsigned long page_number){
-    if (DEBUG){
-        //printf("\nwant to insert %lu, array has len %lu and alloc len %lu", page_number, page_storage->len, page_storage->alloced_len);
-    }
-    //insert first element
+    //set initial values if it's the first insertion
     if (page_storage->len == 0){
-        if (DEBUG){
-            //printf("\ninserting as first element");
-        }
-        
-        //set initial size
         if (page_storage->alloced_len == 0){
             page_storage->page_array = malloc(PAGE_ARRAY_INIT_SIZE * sizeof(unsigned long));
             page_storage->alloced_len = PAGE_ARRAY_INIT_SIZE;
@@ -44,9 +37,9 @@ void page_array_insert(sorted_mem_pages* page_storage, unsigned long page_number
         //=================================================================================
         //the following binary search for insertion location is a modified form of code obtained from
         //https://stackoverflow.com/questions/24868637/inserting-in-to-an-ordered-array-using-binary-search
-        unsigned long mid = 9999999; //default just for checking
+        unsigned long mid = 0;//used to be 9999999
         unsigned long low = 0;
-        unsigned long high = page_storage->len; //include the spot just after everything!
+        unsigned long high = page_storage->len; //ommission of the -1 to ensure search includes the spot 1 past the end of the array
         while (low != high){
             mid = low/2 + high/2;
             if (page_storage->page_array[mid] >= page_number){ //use >= rather than <= to search reverse ordered array 
@@ -58,15 +51,8 @@ void page_array_insert(sorted_mem_pages* page_storage, unsigned long page_number
         unsigned long insert_index = low;
         //=============================end modified code===================================
 
-        if (DEBUG){
-            //printf("\ninsert index %lu", insert_index);
-        }
-        //if not enough memory has been allocated, reallocate and insert
-        if (page_storage->alloced_len < 1 + page_storage->len){
-            if (DEBUG){
-                printf("\n=====================REALLOC=====================");
-            }
-            
+        //if we don't have space to store our new data, reallocate and insert
+        if (page_storage->alloced_len < 1 + page_storage->len){  
             //expand allocation, fill with empty values
             unsigned long* new_storage_array = malloc((page_storage->len * RESIZE_MULTIPLIER) * sizeof(unsigned long));
             page_storage->alloced_len = page_storage->len * RESIZE_MULTIPLIER;
@@ -83,10 +69,6 @@ void page_array_insert(sorted_mem_pages* page_storage, unsigned long page_number
                 new_storage_array[i+insert_offset] = page_storage->page_array[i]; 
             }
             new_storage_array[insert_index] = page_number;
-            if (DEBUG){
-                printf("\n======================page array after realloc and insertion of page #%lu: ", page_number);
-            }
-            
             free(page_storage->page_array);
             page_storage->page_array = new_storage_array;
         }else{
@@ -105,23 +87,14 @@ void page_array_insert(sorted_mem_pages* page_storage, unsigned long page_number
             }
             //insert
             page_storage->page_array[insert_index] = page_number;
-
-            if (DEBUG){
-                printf("\n==========page array after insertion of page #%lu: ", page_number);
-            }
         }
         page_storage->len += 1;
-        if (DEBUG){
-            for (unsigned long cc = 0; cc < page_storage->len; cc++){
-                printf("%lu->", page_storage->page_array[cc]);
-            }
-            printf("END============\n");
-        }
     }
 }
 
 
-//always remove last element
+//***********************************************************************************************
+//remove page with smallest page number, as data is sorted by page number
 unsigned long page_array_pop_last(sorted_mem_pages* page_storage){
     unsigned long popped_page = page_storage->page_array[page_storage->len-1];
     page_storage->page_array[page_storage->len-1] = EMPTY_VALUE;
@@ -129,7 +102,9 @@ unsigned long page_array_pop_last(sorted_mem_pages* page_storage){
     return popped_page;
 }
 
-//complete eviction
+
+//***********************************************************************************************
+//evict all but N pages from a memory array
 void process_evict(sorted_mem_pages* free_memory_pool, sorted_mem_pages* page_storage, unsigned long n_pages_to_keep, unsigned long current_time, sorted_mem_pages* temp_evicted_pages){
     unsigned long freed_page;
 
@@ -139,7 +114,6 @@ void process_evict(sorted_mem_pages* free_memory_pool, sorted_mem_pages* page_st
     }
 
     if (page_storage->len == 0){
-        printf("\n\n===========TRYING TO EVIC PROCESS WITH 0 PAGES ALLOCATED\n\n");
         return;
     }
     
@@ -154,10 +128,10 @@ void process_evict(sorted_mem_pages* free_memory_pool, sorted_mem_pages* page_st
 }
 
 
-//print info about evict
+//***********************************************************************************************
+//eviction output
 void print_evict(sorted_mem_pages* temp_evicted_pages, unsigned long current_time){
     if (temp_evicted_pages->len == 0){
-        //printf("EVICTS WERE EMPTY\n");
         return;
     }
 
@@ -174,10 +148,10 @@ void print_evict(sorted_mem_pages* temp_evicted_pages, unsigned long current_tim
 }
 
 
-//hash table (closer to a lookup table as the hashing function is x => x)
+//***********************************************************************************************
+//hash table constructor. closer to a lookup table, as the hashing function is f(x)=x
 sorted_mem_pages** create_hash_table(){
     sorted_mem_pages** mem_hash_table = malloc((MAX_NUM_PROCESSES) * sizeof(sorted_mem_pages));
-    //populate hash table with empty lists
     for (unsigned long i = 0; i < MAX_NUM_PROCESSES; i++){
         mem_hash_table[i] = construct_mem_pages();
     }
@@ -185,7 +159,8 @@ sorted_mem_pages** create_hash_table(){
 }
 
 
-//fill initial memory pool with pages (maintain reverse sorted ordering)
+//***********************************************************************************************
+//fill free memory pool with pages
 sorted_mem_pages* populate_free_memory_pool(unsigned long available_memory){
     sorted_mem_pages* free_memory_pool = construct_mem_pages();
     unsigned long* page_array = malloc((available_memory/4) * sizeof(unsigned long));
@@ -194,10 +169,8 @@ sorted_mem_pages* populate_free_memory_pool(unsigned long available_memory){
     for (unsigned long i = 0; i < (available_memory/4); i++){ 
         page_array[(available_memory/4) - 1 - i] = i;
     }
-    //ready to output
     free_memory_pool->len = available_memory/4;
     free_memory_pool->alloced_len = available_memory/4;
     free_memory_pool->page_array = page_array;
     return free_memory_pool;
 }
-#endif
