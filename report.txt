@@ -14,14 +14,14 @@ Weak in situations where processes need to be completed soon after arrival.
 This is because starvation of processes with large job-times can occur if processes with shorter job-times keep arriving and being executed with preference.
 
 -----------------------------------------------------------------------------------------------------------------------------------------------------
-Memory manager - Evict from most recently used process first
+Memory manager - Virtual memory, evict from most recent process
 
 i) 
 Load MIN(free memory, memory requirement) to selected process. 
 If the process doesn't have MIN(16KB, memory requirement) memory available, swap memory from the most recently used process until it does.
 
 ii) 
-This is the optimal management algorithm when the most recently used process is furthest away from being run again next use. This makes it strong with round-robin scheduling.
+This is an optimal management algorithm when the most recently used process is also the furthest away from being run again. This makes it strong with round-robin scheduling.
 
 iii) 
-Weaker in situations where some processes are given far more quantums than others, as such processes will be freed then reloaded very frequently.
+Weaker in situations where some processes are executed more frequently than others, as removing pages from the most recently executed process will result in the frequently executed processes constantly reloading pages.
