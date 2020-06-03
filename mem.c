@@ -95,6 +95,11 @@ stats* construct_stats(){
     return new_stats;
 }
 
+void free_stats(stats* target){
+    free(target->endtimes);
+    free(target);
+}
+
 void update_stats(stats* overall_stats, process* completed_process, unsigned long current_time){
     unsigned long turnaround = current_time - completed_process->time_arrived;
     overall_stats->turnaround_aggregate += turnaround;
@@ -202,10 +207,13 @@ process* queue_dequeue(process_queue* queue){
     process* return_val = queue->front->value;
     if (queue->len > 1){
         queue->front->prev->next = NULL;
-        queue->front = queue->front->prev;
+        queue_node* tmp = queue->front->prev;
+        free(queue->front);
+        queue->front = tmp;
     }
     
     if (queue->len == 1){
+        free(queue->front);
         queue->back = NULL;
         queue->front = NULL;
     }
@@ -243,6 +251,13 @@ sorted_mem_pages* construct_mem_pages(){
     new_pages->alloced_len = 0;
     new_pages->page_array = NULL;
     return new_pages;
+}
+
+void free_sorted_mem_pages(sorted_mem_pages* target){
+    if (target->page_array != NULL){
+        free(target->page_array);
+    }
+    free(target);
 }
 
 //maintain reverse sorted order on insertion
@@ -310,7 +325,7 @@ void page_array_insert(sorted_mem_pages* page_storage, unsigned long page_number
                 printf("\n======================page array after realloc and insertion of page #%lu: ", page_number);
             }
             
-            //free(page_storage->page_array);
+            free(page_storage->page_array);
             page_storage->page_array = new_storage_array;
         }else{
             //if no reallocation is required
@@ -465,6 +480,7 @@ void remove_node(process_queue* working_queue, queue_node* target_node){
             }
         }
     }
+    free(target_node);
     working_queue->len -= 1;
 }
 
@@ -486,8 +502,8 @@ process* queue_dequeue_shortest_job(process_queue* working_queue){
 
     //dequeue minimum value without harming queue
     //would be more efficient if a sorted array were used, but this method allows for more code reuse
-    remove_node(working_queue, min_process);
     process* export = min_process->value;
+    remove_node(working_queue, min_process);
     return export;
 }
 
@@ -720,6 +736,9 @@ void sequential_scheduler(process_queue* incoming_process_queue, sorted_mem_page
                     printf("all processes complete...\n");
                 }
                 output_final_stats(overall_stats, current_time);
+                free(cur_process);
+                free_sorted_mem_pages(temp_evicted_pages);
+                free(working_queue);
                 return;
             }
             //wait for next process
@@ -727,6 +746,7 @@ void sequential_scheduler(process_queue* incoming_process_queue, sorted_mem_page
             enqueue_arrived_processes(current_time, working_queue, incoming_process_queue);
         }
 
+        free(cur_process);
         //if first come, just grab the next process from queue
         if (scheduler == SCHEDULER_FCFS){
             cur_process = queue_dequeue(working_queue);
@@ -796,7 +816,7 @@ void round_robin(process_queue* incoming_process_queue, sorted_mem_pages* free_m
             }
             update_stats(overall_stats, cur_process, current_time);
             printf("%lu, FINISHED, id=%lu, proc-remaining=%lu\n", current_time, cur_process->process_id, working_queue->len);
-
+            free(cur_process);
             //if no jobs can be swapped to, simulate waiting for the next job to arrive
             if (working_queue->len == 0){
                 if (DEBUG){
@@ -817,11 +837,13 @@ void round_robin(process_queue* incoming_process_queue, sorted_mem_pages* free_m
                     if (DEBUG){
                         printf("all processes complete\n");
                     }
-                    output_final_stats(overall_stats, current_time);                    
+                    output_final_stats(overall_stats, current_time);
+
+                    free_sorted_mem_pages(temp_evicted_pages);
+                    free(working_queue);               
                     return;
                 }
             }
-            //load next process
             cur_process = queue_dequeue(working_queue);
 
             //apparently running starts before memory is loaded ZZZZZZZ
@@ -883,14 +905,16 @@ process_queue* load_processes(char* filename){
     
     //load processes
     process_queue* incoming_process_queue = construct_queue();
-    for (process* new_process = malloc(sizeof(process)); fscanf(file,"%lu %lu %lu %lu\r\n", &new_process->time_arrived, 
+    process* new_process;
+    for (new_process= malloc(sizeof(process)); fscanf(file,"%lu %lu %lu %lu\r\n", &new_process->time_arrived, 
             &new_process->process_id, &new_process->memory_size_req, 
             &new_process->job_time) == 4;new_process = malloc(sizeof(process))){
         new_process->initial_job_time = new_process->job_time;
         //enqueue process
         queue_enqueue(incoming_process_queue, new_process);
-        
     }
+    free(new_process);
+    fclose(file);
     return incoming_process_queue;
 }
 
@@ -1004,5 +1028,13 @@ int main(int argc, char** argv){
     if (scheduling_algorithm == SCHEDULER_CUSTOM){
         sequential_scheduler(incoming_process_queue, free_memory_pool, mem_usage_table, memory_size, memory_manager, overall_stats, SCHEDULER_CUSTOM);
     }
+
+    free_sorted_mem_pages(free_memory_pool);
+    for (unsigned long i = 0; i < MAX_NUM_PROCESSES; i++){
+        free_sorted_mem_pages(mem_usage_table[i]);
+    }
+    free(mem_usage_table);
+    free_stats(overall_stats);
+    free(incoming_process_queue);
     return 0;
 }
