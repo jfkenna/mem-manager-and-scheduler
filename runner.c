@@ -1,0 +1,164 @@
+//includes
+#include "stdio.h"
+#include "stdlib.h"
+#include "unistd.h" //option processing
+#include "string.h"
+
+#include "config.h"
+#include "process.h"
+#include "queue.h"
+#include "sorted_pages.h"
+#include "memory_manager.h"
+#include "schedulers.h"
+#include "stats.h"
+
+
+//***********************************************************************************************
+//hidden to actual assignment, stores incoming data with having to constantly do IO
+process_queue* load_processes(char* filename){
+    //open file
+    FILE* file = fopen(filename, "r");
+
+    //if file open failed
+    if (file == NULL){
+        if (DEBUG){
+            printf("null file, returning...\n");
+        }
+        return NULL;
+    }
+    
+    //load processes
+    process_queue* incoming_process_queue = construct_queue();
+    process* new_process;
+    for (new_process= malloc(sizeof(process)); fscanf(file,"%lu %lu %lu %lu\r\n", &new_process->time_arrived, 
+            &new_process->process_id, &new_process->memory_size_req, 
+            &new_process->job_time) == 4;new_process = malloc(sizeof(process))){
+        new_process->initial_job_time = new_process->job_time;
+        //enqueue process
+        queue_enqueue(incoming_process_queue, new_process);
+    }
+    free(new_process);
+    fclose(file);
+    return incoming_process_queue;
+}
+
+
+//TODO!!! ENSURE QUEUE IS SORTED BY TIME WHEN FIRST LOADING IN!!!!
+//***********************************************************************************************
+int main(int argc, char** argv){
+    //disable print buffer
+    setvbuf(stdout, NULL, _IONBF, 0);
+
+    //get control args
+    int opt;
+    unsigned long quantum = 0;
+    unsigned long memory_size = 0;
+    char memory_manager = '\0';
+    char scheduling_algorithm = '\0';
+    char* filename = NULL;
+    while ((opt = getopt(argc, argv, "f:a:m:s:q:")) != -1){
+        if (DEBUG){
+            printf("new param - ");
+        }
+        
+        if (opt == 'f'){
+            filename = optarg;
+            if (DEBUG){
+                printf("filename: %s\n", filename);
+            }
+            
+        }
+        if (opt == 'a'){
+            scheduling_algorithm = optarg[0];
+            if (DEBUG){
+                printf("scheduling algorithm: %c\n", scheduling_algorithm);
+            }
+            
+        }
+        if (opt == 'm'){
+            memory_manager = optarg[0];
+            if (DEBUG){
+                printf("allocator type: %c\n", memory_manager);
+            }
+            
+        }
+        if (opt == 's'){
+            memory_size = strtoul(optarg, NULL, 0);
+            if (DEBUG){
+                printf("memory size: %lu\n", memory_size);
+            }
+            
+        }
+        if (opt == 'q'){
+            quantum = strtoul(optarg, NULL, 0);
+            if (DEBUG){
+                printf("quantum: %lu\n", quantum);
+            }
+            
+        }
+        if (opt == '?'){
+            if (DEBUG){
+                printf("1 or more args not recognised... returning\n");
+            }
+            
+            return 1;
+        }
+    }
+
+    if (scheduling_algorithm == '\0' || memory_manager == '\0' || filename == NULL){
+        if (DEBUG){
+            printf("a required arg wasn't set... returning\n");
+        }
+        
+        return 1;
+    }
+
+    //read data
+    if (DEBUG){
+        printf("attempting to read file: \"%s\"\n", filename);
+    }
+    
+    process_queue* incoming_process_queue = load_processes(filename);
+    if (DEBUG){
+        print_queue(incoming_process_queue);
+    }
+    
+
+    //handle errors during read
+    if (incoming_process_queue->len == 0){
+        if (DEBUG){
+            printf("error during file read... returning...\n");
+        }
+        return 1;
+    }
+
+    //initialize memory pool and mem hashtable if they will be used
+    //set to 1 to avoid crashes when populating memory
+    if (memory_size == 0){
+        memory_size = 1;
+    }
+    sorted_mem_pages* free_memory_pool = populate_free_memory_pool(memory_size);
+    sorted_mem_pages** mem_usage_table = create_hash_table();
+    stats* overall_stats = construct_stats();
+
+    
+    //run round robin scheduler with unlimited memory
+    if (scheduling_algorithm == SCHEDULER_RR){
+        round_robin(incoming_process_queue, free_memory_pool, mem_usage_table, quantum, memory_size, memory_manager, overall_stats);
+    }
+    if (scheduling_algorithm == SCHEDULER_FCFS){
+        sequential_scheduler(incoming_process_queue, free_memory_pool, mem_usage_table, memory_size, memory_manager, overall_stats, SCHEDULER_FCFS);
+    }
+    if (scheduling_algorithm == SCHEDULER_CUSTOM){
+        sequential_scheduler(incoming_process_queue, free_memory_pool, mem_usage_table, memory_size, memory_manager, overall_stats, SCHEDULER_CUSTOM);
+    }
+
+    free_sorted_mem_pages(free_memory_pool);
+    for (unsigned long i = 0; i < MAX_NUM_PROCESSES; i++){
+        free_sorted_mem_pages(mem_usage_table[i]);
+    }
+    free(mem_usage_table);
+    free_stats(overall_stats);
+    free(incoming_process_queue);
+    return 0;
+}
