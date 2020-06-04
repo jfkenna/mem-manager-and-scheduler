@@ -27,9 +27,10 @@ process_queue* load_processes(char* filename){
     //load processes
     process_queue* incoming_process_queue = construct_queue();
     process* new_process;
-    for (new_process= malloc(sizeof(process)); fscanf(file,"%lu %lu %lu %lu\r\n", &new_process->time_arrived, 
-            &new_process->process_id, &new_process->memory_size_req, 
-            &new_process->job_time) == 4;new_process = malloc(sizeof(process))){
+    for (new_process= malloc(sizeof(process)); fscanf(file,"%lu %lu %lu %lu\r\n", 
+        &new_process->time_arrived, &new_process->process_id, &new_process->memory_size_req, 
+        &new_process->job_time) == 4; new_process = malloc(sizeof(process))){
+
         new_process->initial_job_time = new_process->job_time;
         //enqueue process
         queue_enqueue(incoming_process_queue, new_process);
@@ -99,13 +100,16 @@ int main(int argc, char** argv){
 
     //select and run scheduler with provided algorithms
     if (scheduling_algorithm == SCHEDULER_RR){
-        round_robin(incoming_process_queue, free_memory_pool, mem_usage_table, quantum, memory_size, memory_manager, overall_stats);
+        round_robin(incoming_process_queue, free_memory_pool, mem_usage_table, 
+            quantum, memory_size, memory_manager, overall_stats);
     }
     if (scheduling_algorithm == SCHEDULER_FCFS){
-        sequential_scheduler(incoming_process_queue, free_memory_pool, mem_usage_table, memory_size, memory_manager, overall_stats, SCHEDULER_FCFS);
+        sequential_scheduler(incoming_process_queue, free_memory_pool, mem_usage_table,
+            memory_size, memory_manager, overall_stats, SCHEDULER_FCFS);
     }
     if (scheduling_algorithm == SCHEDULER_CUSTOM){
-        sequential_scheduler(incoming_process_queue, free_memory_pool, mem_usage_table, memory_size, memory_manager, overall_stats, SCHEDULER_CUSTOM);
+        sequential_scheduler(incoming_process_queue, free_memory_pool, mem_usage_table,
+            memory_size, memory_manager, overall_stats, SCHEDULER_CUSTOM);
     }
 
     //free before exit

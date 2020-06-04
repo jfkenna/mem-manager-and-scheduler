@@ -84,16 +84,13 @@ void remove_node(process_queue* working_queue, queue_node* target_node){
 
     if (working_queue->len > 2){
         if (target_node == working_queue->back){
-            printf("isBack");
             target_node->next->prev = NULL;
             working_queue->back = target_node->next;
         }else{
             if (target_node == working_queue->front){
-                printf("isFront");
                 target_node->prev->next = NULL;
                 working_queue->front = target_node->prev;
             }else{
-                printf("isNeither");
                 target_node->prev->next = target_node->next;
                 target_node->next->prev = target_node->prev;
             }

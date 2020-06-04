@@ -5,6 +5,13 @@
 
 
 //***********************************************************************************************
+//Some of the lines in this file are quite long
+//and may be difficult to read if you are using a small screen.
+//I attempted to decompose them into multiple lines using \ 
+//but found that  the resulting lines were less readable.
+//Apologies : (
+
+//***********************************************************************************************
 //ordered page constructor / freer
 sorted_mem_pages* construct_mem_pages(){
     sorted_mem_pages* new_pages = malloc(sizeof(sorted_mem_pages));
@@ -37,12 +44,14 @@ void page_array_insert(sorted_mem_pages* page_storage, unsigned long page_number
         //=================================================================================
         //the following binary search for insertion location is a modified form of code obtained from
         //https://stackoverflow.com/questions/24868637/inserting-in-to-an-ordered-array-using-binary-search
-        unsigned long mid = 0;//used to be 9999999
+        unsigned long mid = 0;
         unsigned long low = 0;
-        unsigned long high = page_storage->len; //ommission of the -1 to ensure search includes the spot 1 past the end of the array
+        //len is used rather than len -1 to ensure search includes the spot 1 past the last element of the array
+        unsigned long high = page_storage->len;
         while (low != high){
             mid = low/2 + high/2;
-            if (page_storage->page_array[mid] >= page_number){ //use >= rather than <= to search reverse ordered array 
+            //use >= rather than <= to search reverse ordered array 
+            if (page_storage->page_array[mid] >= page_number){ 
                 low = mid + 1;
             }else{
                 high = mid;
@@ -105,7 +114,10 @@ unsigned long page_array_pop_last(sorted_mem_pages* page_storage){
 
 //***********************************************************************************************
 //evict all but N pages from a memory array
-void process_evict(sorted_mem_pages* free_memory_pool, sorted_mem_pages* page_storage, unsigned long n_pages_to_keep, unsigned long current_time, sorted_mem_pages* temp_evicted_pages){
+void process_evict(sorted_mem_pages* free_memory_pool, sorted_mem_pages* page_storage, 
+    unsigned long n_pages_to_keep, unsigned long current_time, 
+    sorted_mem_pages* temp_evicted_pages){
+
     unsigned long freed_page;
 
     //check first to avoid removing an extra page

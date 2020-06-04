@@ -20,7 +20,9 @@
 #define WINDOW_SIZE 60
 
 //treat max unsigned long as missing value
-#define EMPTY_VALUE 4294967295 //i'm aware that this value of ULONG_MAX isn't guaranteed, fk it tho
+//i know this isn't to be ULONG_MAX, but it's ULONG_MAX on the testing environment
+//and my local environment, so it works for the purposes of this project
+#define EMPTY_VALUE 4294967295 
 
 //debugging
 #define DEBUG 0
