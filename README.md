@@ -15,8 +15,16 @@ This application simulates an OS running a variety of process scheduling and mem
 TODO
 
 ## Invocation Instructions
+1. Compile simulator by running ```make``` at root directory
+2. Run simulator with args specifying strategies, input, memory size etc. (see arg table below)
 
-TODO
+| Arg | Description |
+|-------------------|
+|\-f | Filename of input data |
+|\-a | Scheduling algorithm   |
+|\-m | Memory manager |
+|\-s | Memory page size (if your management algorithm uses pages) |
+|\-q | Quantum (time a process will execute for before scheduler considers allowing another process to execute) |
 
 ## Supported Memory Management Strategies
 - Unlimited memory with no page swapping: 'u'
