@@ -12,18 +12,18 @@ This application simulates an OS running a variety of process scheduling and mem
 
 # Simulation Options
 
-TODO
-
 ## Invocation Instructions
 1. Compile simulator by running ```make``` at root directory
-2. Run simulator with args specifying strategies, input, memory size etc. (see arg table below)
+2. Run simulator with args specifying strategies, input, memory size etc. (see arg table below). As an example, the following will run a simulation w/ round-robin scheduling and virtual memory based on input from test_data.txt.
 
-| Arg | Description |
-|-------------------|
-|\-f | Filename of input data |
-|\-a | Scheduling algorithm   |
-|\-m | Memory manager |
-|\-s | Memory page size (if your management algorithm uses pages) |
+```simulator -f test_data.txt -a r -m v -s 4 -q 1```
+
+|Arg | Description                                                                                             |
+|----|----------------------------------------------------------------------------------------------------------|
+|\-f | Filename of input data                                                                                   |
+|\-a | Scheduling algorithm                                                                                     | 
+|\-m | Memory manager                                                                                           |
+|\-s | Memory page size (if memory management strategy uses pages)                                              |
 |\-q | Quantum (time a process will execute for before scheduler considers allowing another process to execute) |
 
 ## Supported Memory Management Strategies
